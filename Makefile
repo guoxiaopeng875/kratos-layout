@@ -13,10 +13,13 @@ init:
 	go install google.golang.org/grpc/cmd/protoc-gen-go-grpc@latest
 	go install github.com/go-kratos/kratos/cmd/kratos/v2@latest
 	go install github.com/go-kratos/kratos/cmd/protoc-gen-go-http/v2@latest
+	go install github.com/go-kratos/kratos/cmd/protoc-gen-go-errors/v2@latest
 	go install github.com/google/gnostic/cmd/protoc-gen-openapi@latest
 	go install github.com/google/wire/cmd/wire@latest
 	go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@latest
 	go install golang.org/x/tools/cmd/goimports@latest
+	go install go.uber.org/mock/mockgen@latest
+	@which atlas > /dev/null 2>&1 || (echo "Installing Atlas CLI..." && curl -sSf https://atlasgo.sh | sh)
 
 .PHONY: config
 # generate internal proto
@@ -46,6 +49,12 @@ build:
 bin/%:
 	@./scripts/build.sh "$*" "$(VERSION)"
 
+.PHONY: mock
+# generate mocks for biz and data layers
+mock:
+	go generate ./internal/biz/...
+	go generate ./internal/data/...
+
 .PHONY: generate
 # generate
 generate:
@@ -57,6 +66,7 @@ generate:
 all:
 	make api
 	make config
+	make mock
 	make generate
 
 .PHONY: test
@@ -76,6 +86,11 @@ check:
 	gofmt -w .
 	go test -race $$(go list ./... | grep -v /test/integration/)
 	golangci-lint run ./...
+
+.PHONY: coverage
+# run tests with coverage check
+coverage:
+	./scripts/coverage.sh ./pkg/... ./internal/biz/... ./internal/data/...
 
 .PHONY: lint
 # run linter

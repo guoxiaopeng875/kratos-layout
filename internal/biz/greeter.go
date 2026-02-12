@@ -9,6 +9,8 @@ import (
 	"github.com/go-kratos/kratos/v2/log"
 )
 
+//go:generate mockgen -source=greeter.go -destination=mock_greeter_test.go -package=biz
+
 var (
 	// ErrUserNotFound is user not found.
 	ErrUserNotFound = errors.NotFound(v1.ErrorReason_USER_NOT_FOUND.String(), "user not found")
