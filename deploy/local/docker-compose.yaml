@@ -1,0 +1,24 @@
+services:
+  app-service:
+    image: app-service:local
+    build:
+      context: ../..
+      dockerfile: deploy/local/Dockerfile.app-service
+      args:
+        - GIT_HOST=${GIT_HOST}
+      secrets:
+        - GIT_TOKEN
+    container_name: app-service
+#    ports:
+#      - "8000:8000"
+#      - "9000:9000"
+    volumes:
+      - ./app-service-config.yaml:/app/config/app-service-config.yaml:ro
+    environment:
+      - LOG_LEVEL=info
+      - NACOS_SERVER_ADDRS=host.docker.internal:8848
+    restart: unless-stopped
+
+secrets:
+  GIT_TOKEN:
+    environment: GIT_TOKEN

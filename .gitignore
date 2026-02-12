@@ -36,3 +36,13 @@ bin/
 .vscode/
 .idea/
 *.swp
+tmp/
+.cursor/
+
+# ai
+CLAUDE.md
+AGENTS.md
+.claude/
+
+# deploy
+deploy/*/.env

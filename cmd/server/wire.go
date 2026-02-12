@@ -9,8 +9,10 @@ import (
 	"github.com/go-kratos/kratos-layout/internal/biz"
 	"github.com/go-kratos/kratos-layout/internal/conf"
 	"github.com/go-kratos/kratos-layout/internal/data"
+	"github.com/go-kratos/kratos-layout/internal/job"
 	"github.com/go-kratos/kratos-layout/internal/server"
 	"github.com/go-kratos/kratos-layout/internal/service"
+	"github.com/go-kratos/kratos-layout/pkg/registry/nacos"
 
 	"github.com/go-kratos/kratos/v2"
 	"github.com/go-kratos/kratos/v2/log"
@@ -18,6 +20,6 @@ import (
 )
 
 // wireApp init kratos application.
-func wireApp(*conf.Server, *conf.Data, log.Logger) (*kratos.App, func(), error) {
-	panic(wire.Build(server.ProviderSet, data.ProviderSet, biz.ProviderSet, service.ProviderSet, newApp))
+func wireApp(*conf.Server, *conf.Data, *conf.RocketMQ, *nacos.Registry, log.Logger) (*kratos.App, func(), error) {
+	panic(wire.Build(server.ProviderSet, data.ProviderSet, biz.ProviderSet, service.ProviderSet, job.ProviderSet, newApp))
 }

@@ -2,18 +2,9 @@ GOHOSTOS:=$(shell go env GOHOSTOS)
 GOPATH:=$(shell go env GOPATH)
 VERSION=$(shell git describe --tags --always)
 
-ifeq ($(GOHOSTOS), windows)
-	#the `find.exe` is different from `find` in bash/shell.
-	#to see https://docs.microsoft.com/en-us/windows-server/administration/windows-commands/find.
-	#changed to use git-bash.exe to run find cli or other cli friendly, caused of every developer has a Git.
-	#Git_Bash= $(subst cmd\,bin\bash.exe,$(dir $(shell where git)))
-	Git_Bash=$(subst \,/,$(subst cmd\,bin\bash.exe,$(dir $(shell where git))))
-	INTERNAL_PROTO_FILES=$(shell $(Git_Bash) -c "find internal -name *.proto")
-	API_PROTO_FILES=$(shell $(Git_Bash) -c "find api -name *.proto")
-else
-	INTERNAL_PROTO_FILES=$(shell find internal -name *.proto)
-	API_PROTO_FILES=$(shell find api -name *.proto)
-endif
+INTERNAL_PROTO_FILES=$(shell find internal -name *.proto)
+API_PROTO_FILES=$(shell find api -name *.proto)
+
 
 .PHONY: init
 # init env
@@ -24,6 +15,8 @@ init:
 	go install github.com/go-kratos/kratos/cmd/protoc-gen-go-http/v2@latest
 	go install github.com/google/gnostic/cmd/protoc-gen-openapi@latest
 	go install github.com/google/wire/cmd/wire@latest
+	go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@latest
+	go install golang.org/x/tools/cmd/goimports@latest
 
 .PHONY: config
 # generate internal proto
@@ -49,6 +42,10 @@ api:
 build:
 	mkdir -p bin/ && go build -ldflags "-X main.Version=$(VERSION)" -o ./bin/ ./...
 
+# build single binary for CICD (usage: make bin/${APP_NAME})
+bin/%:
+	@./scripts/build.sh "$*" "$(VERSION)"
+
 .PHONY: generate
 # generate
 generate:
@@ -61,6 +58,95 @@ all:
 	make api
 	make config
 	make generate
+
+.PHONY: test
+# run unit tests (excludes integration tests)
+test:
+	go test -v -race $$(go list ./... | grep -v /test/integration/)
+
+.PHONY: test-integration
+# run integration tests
+test-integration:
+	go test -v -race -timeout 15m ./test/integration/...
+
+.PHONY: check
+# format code, run tests and lint
+check:
+	goimports -w .
+	gofmt -w .
+	go test -race $$(go list ./... | grep -v /test/integration/)
+	golangci-lint run ./...
+
+.PHONY: lint
+# run linter
+lint:
+	golangci-lint run ./...
+
+.PHONY: fmt
+# format code
+fmt:
+	goimports -w .
+	gofmt -w .
+
+.PHONY: hooks
+# install git hooks
+hooks:
+	cp scripts/pre-commit.sh .git/hooks/pre-commit
+	chmod +x .git/hooks/pre-commit
+	@echo "Git hooks installed."
+
+
+.PHONY: init-db
+# initialize database schema
+init-db:
+	@echo "Dropping existing test database..."
+	docker exec -i kratos-mysql mysql -uroot -proot -e "DROP DATABASE IF EXISTS app_local;"
+	@echo "Creating database..."
+	docker exec -i kratos-mysql mysql -uroot -proot -e "CREATE DATABASE app_local CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;"
+	@echo "Creating tables..."
+	cat scripts/sql/migration/*.sql | docker exec -i kratos-mysql mysql -uroot -proot app_local
+	@echo "Initializing test data..."
+	#cat deploy/local/init_data.sql | docker exec -i kratos-mysql mysql -uroot -proot app_local
+	@echo "Test database initialized!"
+
+.PHONY: migrate-diff
+# generate migration SQL from GORM model changes
+migrate-diff:
+	atlas migrate diff --env local
+
+.PHONY: migrate-hash
+# rehash migration directory after manual edits
+migrate-hash:
+	atlas migrate hash --env local
+
+.PHONY: reset-db
+# reset database (drop and recreate)
+reset-db:
+	@echo "Clearing Redis cache..."
+	docker exec -i kratos-redis redis-cli FLUSHALL || true
+	$(MAKE) init-db
+
+.PHONY: run
+# start all services
+run:
+	./scripts/start-app-service.sh start
+
+.PHONY: stop
+# stop all services
+stop:
+	./scripts/start-app-service.sh stop || true
+
+.PHONY: rebuild
+# rebuild and start all services
+rebuild:
+	./scripts/start-app-service.sh rebuild
+
+.PHONY: reset
+# reset test environment (stop services, reinit db, start services)
+reset:
+	$(MAKE) stop
+	$(MAKE) reset-db
+	$(MAKE) run
 
 # show help
 help:

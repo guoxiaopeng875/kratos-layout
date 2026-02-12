@@ -8,6 +8,20 @@ import "google/protobuf/duration.proto";
 message Bootstrap {
   Server server = 1;
   Data data = 2;
+  RocketMQ rocketmq = 3;
+  // Add your business configuration here
+  // Example: YourDomain your_domain = 4;
+}
+
+// RocketMQ 消息队列配置 (v5 SDK)
+message RocketMQ {
+  string name_servers = 1;              // gRPC Proxy 端点地址 (如 127.0.0.1:8081)
+  string producer_group = 2;            // Producer/Consumer 组名
+  google.protobuf.Duration send_timeout = 3;  // 发送超时时间
+  int32 retry_times = 4;                // 重试次数
+  string access_key = 5;                // 访问密钥（可选）
+  string secret_key = 6;                // 密钥（可选）
+  string env = 7;                       // 环境标识，非空时作为 topic 后缀 (如 "dev" → topic_dev)
 }
 
 message Server {
@@ -27,15 +41,27 @@ message Server {
 
 message Data {
   message Database {
-    string driver = 1;
-    string source = 2;
+    string username = 1;
+    string password = 2;
+    string host = 3;
+    int64 port = 4;
+    string db_name = 5;
+    int64 max_idle_conns = 6;
+    int64 max_open_conns = 7;
+    string db_charset = 8;
+    google.protobuf.Duration conn_max_lifetime = 9;
+    google.protobuf.Duration conn_max_idle_time = 10;
   }
   message Redis {
     string network = 1;
     string addr = 2;
-    google.protobuf.Duration read_timeout = 3;
-    google.protobuf.Duration write_timeout = 4;
+    string password = 3;
+    int32 db = 4;
+    google.protobuf.Duration dial_timeout = 5;
+    google.protobuf.Duration read_timeout = 6;
+    google.protobuf.Duration write_timeout = 7;
   }
+
   Database database = 1;
   Redis redis = 2;
 }
