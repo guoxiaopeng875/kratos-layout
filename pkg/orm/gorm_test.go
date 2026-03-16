@@ -1,26 +1,66 @@
 package orm
 
 import (
+	"fmt"
+	"os"
+	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/require"
+	"gopkg.in/yaml.v3"
 )
 
-var password = "root"
+type testDatabaseConfig struct {
+	Username     string `yaml:"username"`
+	Password     string `yaml:"password"`
+	Host         string `yaml:"host"`
+	Port         int    `yaml:"port"`
+	DBName       string `yaml:"db_name"`
+	MaxIdleConns int    `yaml:"max_idle_conns"`
+	MaxOpenConns int    `yaml:"max_open_conns"`
+	DBCharset    string `yaml:"db_charset"`
+}
+
+type testYAMLConfig struct {
+	Data struct {
+		Database testDatabaseConfig `yaml:"database"`
+	} `yaml:"data"`
+}
+
+func loadTestDBConfig(t *testing.T) *DBConfig {
+	t.Helper()
+
+	_, currentFile, _, ok := runtime.Caller(0)
+	require.True(t, ok, "failed to get current file path")
+
+	projectRoot := filepath.Dir(filepath.Dir(filepath.Dir(currentFile)))
+	configPath := filepath.Join(projectRoot, "configs", ".local.config.yaml")
+
+	data, err := os.ReadFile(configPath)
+	require.NoError(t, err, "failed to read config file: %s", configPath)
+
+	var cfg testYAMLConfig
+	err = yaml.Unmarshal(data, &cfg)
+	require.NoError(t, err, "failed to parse config file")
+
+	db := cfg.Data.Database
+	return &DBConfig{
+		Username:     db.Username,
+		Password:     db.Password,
+		Host:         db.Host,
+		Port:         fmt.Sprintf("%d", db.Port),
+		DBName:       db.DBName,
+		MaxIdleConns: db.MaxIdleConns,
+		MaxOpenConns: db.MaxOpenConns,
+		DBCharset:    db.DBCharset,
+	}
+}
 
 func TestMakeDBUtil(t *testing.T) {
-	dbConf := &DBConfig{
-		Username:     "root",
-		Password:     password,
-		Host:         "127.0.0.1",
-		Port:         "3306",
-		DBName:       "hahaha_test",
-		MaxIdleConns: 10,
-		MaxOpenConns: 100,
-		DBCharset:    "utf8mb4",
-	}
+	dbConf := loadTestDBConfig(t)
 
 	utilDB, err := MakeDBUtil(dbConf)
 	require.NoError(t, err)
@@ -34,16 +74,7 @@ func TestMakeDBUtil(t *testing.T) {
 }
 
 func TestMakeDB(t *testing.T) {
-	dbConf := &DBConfig{
-		Username:     "root",
-		Password:     password,
-		Host:         "127.0.0.1",
-		Port:         "3306",
-		DBName:       "hahaha_test",
-		MaxIdleConns: 10,
-		MaxOpenConns: 100,
-		DBCharset:    "utf8mb4",
-	}
+	dbConf := loadTestDBConfig(t)
 
 	utilDB, err := MakeDBUtil(dbConf)
 	require.NoError(t, err)
@@ -175,16 +206,7 @@ func TestDBConfig_getConnMaxIdleTime(t *testing.T) {
 }
 
 func TestGormMysql_GetUtilDB(t *testing.T) {
-	dbConf := &DBConfig{
-		Username:     "root",
-		Password:     password,
-		Host:         "127.0.0.1",
-		Port:         "3306",
-		DBName:       "hahaha_test",
-		MaxIdleConns: 10,
-		MaxOpenConns: 100,
-		DBCharset:    "utf8mb4",
-	}
+	dbConf := loadTestDBConfig(t)
 
 	utilDB, err := MakeDBUtil(dbConf)
 	require.NoError(t, err)
@@ -197,16 +219,7 @@ func TestGormMysql_GetUtilDB(t *testing.T) {
 }
 
 func TestGormMysql_GetDB(t *testing.T) {
-	dbConf := &DBConfig{
-		Username:     "root",
-		Password:     password,
-		Host:         "127.0.0.1",
-		Port:         "3306",
-		DBName:       "hahaha_test",
-		MaxIdleConns: 10,
-		MaxOpenConns: 100,
-		DBCharset:    "utf8mb4",
-	}
+	dbConf := loadTestDBConfig(t)
 
 	utilDB, err := MakeDBUtil(dbConf)
 	require.NoError(t, err)
@@ -230,16 +243,7 @@ func TestGormMysql_GetDB(t *testing.T) {
 }
 
 func TestGormMysql_CreateDB_Error(t *testing.T) {
-	dbConf := &DBConfig{
-		Username:     "root",
-		Password:     password,
-		Host:         "127.0.0.1",
-		Port:         "3306",
-		DBName:       "hahaha_test",
-		MaxIdleConns: 10,
-		MaxOpenConns: 100,
-		DBCharset:    "utf8mb4",
-	}
+	dbConf := loadTestDBConfig(t)
 
 	// Create a gormMysql instance without initializing utilDB
 	gm := &gormMysql{dbConfig: dbConf}
@@ -250,16 +254,7 @@ func TestGormMysql_CreateDB_Error(t *testing.T) {
 }
 
 func TestGormMysql_DropDB_Error(t *testing.T) {
-	dbConf := &DBConfig{
-		Username:     "root",
-		Password:     password,
-		Host:         "127.0.0.1",
-		Port:         "3306",
-		DBName:       "hahaha_test",
-		MaxIdleConns: 10,
-		MaxOpenConns: 100,
-		DBCharset:    "utf8mb4",
-	}
+	dbConf := loadTestDBConfig(t)
 
 	// Create a gormMysql instance without initializing utilDB
 	gm := &gormMysql{dbConfig: dbConf}
@@ -270,16 +265,8 @@ func TestGormMysql_DropDB_Error(t *testing.T) {
 }
 
 func TestGormMysql_ClearAllData_Error(t *testing.T) {
-	dbConf := &DBConfig{
-		Username:     "root",
-		Password:     password,
-		Host:         "127.0.0.1",
-		Port:         "3306",
-		DBName:       "production_db",
-		MaxIdleConns: 10,
-		MaxOpenConns: 100,
-		DBCharset:    "utf8mb4",
-	}
+	dbConf := loadTestDBConfig(t)
+	dbConf.DBName = "production_db" // Override to test non-test DB name rejection
 
 	utilDB, err := MakeDBUtil(dbConf)
 	require.NoError(t, err)
@@ -303,16 +290,7 @@ func TestGormMysql_ClearAllData_Error(t *testing.T) {
 }
 
 func TestGormMysql_ClearAllData_DBNil(t *testing.T) {
-	dbConf := &DBConfig{
-		Username:     "root",
-		Password:     password,
-		Host:         "127.0.0.1",
-		Port:         "3306",
-		DBName:       "hahaha_test",
-		MaxIdleConns: 10,
-		MaxOpenConns: 100,
-		DBCharset:    "utf8mb4",
-	}
+	dbConf := loadTestDBConfig(t)
 
 	// Create a gormMysql instance without initializing db
 	gm := &gormMysql{dbConfig: dbConf}
@@ -323,16 +301,7 @@ func TestGormMysql_ClearAllData_DBNil(t *testing.T) {
 }
 
 func TestGormMysql_Close(t *testing.T) {
-	dbConf := &DBConfig{
-		Username:     "root",
-		Password:     password,
-		Host:         "127.0.0.1",
-		Port:         "3306",
-		DBName:       "hahaha_test",
-		MaxIdleConns: 10,
-		MaxOpenConns: 100,
-		DBCharset:    "utf8mb4",
-	}
+	dbConf := loadTestDBConfig(t)
 
 	utilDB, err := MakeDBUtil(dbConf)
 	require.NoError(t, err)
@@ -394,6 +363,59 @@ func TestGormMysql_buildDSN(t *testing.T) {
 			require.Equal(t, tt.expected, result)
 		})
 	}
+}
+
+func TestGormMysql_buildDSN_WithMultiStatements(t *testing.T) {
+	dbConf := &DBConfig{
+		Username:        "user",
+		Password:        "pass",
+		Host:            "host",
+		Port:            "3306",
+		DBName:          "db",
+		MultiStatements: true,
+	}
+
+	gm := &gormMysql{dbConfig: dbConf}
+
+	result := gm.buildDSN("testdb")
+	require.Contains(t, result, "&multiStatements=true")
+}
+
+func TestGormMysql_initGormDB_AlreadyInitialized(t *testing.T) {
+	dbConf := loadTestDBConfig(t)
+
+	utilDB, err := MakeDBUtil(dbConf)
+	require.NoError(t, err)
+	defer utilDB.Close()
+
+	err = utilDB.CreateDB()
+	require.NoError(t, err)
+	defer func() {
+		dropErr := utilDB.DropDB()
+		require.NoError(t, dropErr)
+	}()
+
+	db, err := MakeDB(dbConf)
+	require.NoError(t, err)
+	defer db.Close()
+
+	gm := db.(*gormMysql)
+	err = gm.initGormDB()
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "already initialized")
+}
+
+func TestGormMysql_initUtilDB_AlreadyInitialized(t *testing.T) {
+	dbConf := loadTestDBConfig(t)
+
+	utilDB, err := MakeDBUtil(dbConf)
+	require.NoError(t, err)
+	defer utilDB.Close()
+
+	gm := utilDB.(*gormMysql)
+	err = gm.initUtilDB()
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "already initialized")
 }
 
 func TestGormMysql_buildDSN_DefaultCharset(t *testing.T) {

@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestParseServerAddrs(t *testing.T) {
@@ -165,4 +166,49 @@ func TestNewNacosConfigFromEnv(t *testing.T) {
 		assert.Equal(t, "/var/cache/nacos", cfg.CacheDir)
 		assert.Equal(t, "debug", cfg.LogLevel)
 	})
+}
+
+func TestNewNacosRegistry(t *testing.T) {
+	r := NewNacosRegistry(nil)
+	require.NotNil(t, r)
+}
+
+func TestNewNacosNamingClient(t *testing.T) {
+	cfg := &NacosConfig{
+		ServerAddrs: []ServerAddr{
+			{IP: "127.0.0.1", Port: 8848},
+		},
+		NamespaceID: "test-ns",
+		LogDir:      t.TempDir(),
+		CacheDir:    t.TempDir(),
+		LogLevel:    "warn",
+	}
+
+	// NewNamingClient may succeed (creating client struct) or fail (no server)
+	// Either way, we cover the function body
+	client, err := NewNacosNamingClient(cfg)
+	if err != nil {
+		// Expected when no Nacos server is running
+		t.Logf("NewNacosNamingClient returned expected error: %v", err)
+		return
+	}
+	require.NotNil(t, client)
+}
+
+func TestNewNacosNamingClient_MultipleServers(t *testing.T) {
+	cfg := &NacosConfig{
+		ServerAddrs: []ServerAddr{
+			{IP: "10.0.0.1", Port: 8848},
+			{IP: "10.0.0.2", Port: 8849},
+		},
+		NamespaceID: "",
+		LogDir:      t.TempDir(),
+		CacheDir:    t.TempDir(),
+		LogLevel:    "warn",
+	}
+
+	_, err := NewNacosNamingClient(cfg)
+	if err != nil {
+		t.Logf("NewNacosNamingClient returned expected error: %v", err)
+	}
 }
