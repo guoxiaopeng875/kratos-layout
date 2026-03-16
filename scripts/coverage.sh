@@ -52,7 +52,7 @@ TOTAL_COVERAGE=$(go tool cover -func=coverage.out | grep "total:" | awk '{print 
 FAILED=0
 
 if [ -n "$TOTAL_COVERAGE" ]; then
-    if [ "$(echo "$TOTAL_COVERAGE < $MIN_COVERAGE" | bc -l)" -eq 1 ]; then
+    if awk "BEGIN {exit !($TOTAL_COVERAGE < $MIN_COVERAGE)}"; then
         echo -e "${RED}[FAIL]${NC} Total coverage: ${TOTAL_COVERAGE}% < ${MIN_COVERAGE}%"
         FAILED=1
     else

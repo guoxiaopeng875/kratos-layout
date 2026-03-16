@@ -46,3 +46,5 @@ AGENTS.md
 
 # deploy
 deploy/*/.env
+
+configs/.local.config.yaml
