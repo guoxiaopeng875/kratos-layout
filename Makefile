@@ -18,8 +18,6 @@ init:
 	go install github.com/google/wire/cmd/wire@latest
 	go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@latest
 	go install golang.org/x/tools/cmd/goimports@latest
-	go install go.uber.org/mock/mockgen@latest
-	@which atlas > /dev/null 2>&1 || (echo "Installing Atlas CLI..." && curl -sSf https://atlasgo.sh | sh)
 
 .PHONY: config
 # generate internal proto

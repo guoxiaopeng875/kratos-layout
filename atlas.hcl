@@ -1,7 +1,10 @@
 data "external_schema" "gorm" {
   program = [
     "go", "run", "-mod=mod",
-    "./cmd/atlas-loader",
+    "ariga.io/atlas-provider-gorm",
+    "load",
+    "--path", "./internal/data/model",
+    "--dialect", "mysql",
   ]
 }
 

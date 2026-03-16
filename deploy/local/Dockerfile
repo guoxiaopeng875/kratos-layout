@@ -1,4 +1,4 @@
-FROM app-local:latest AS builder
+FROM golang:1.26.1-bookworm AS builder
 
 ARG GIT_HOST
 
@@ -9,26 +9,18 @@ RUN --mount=type=secret,id=GIT_TOKEN \
       chmod 600 /root/.netrc; \
     fi
 
+COPY . /src
 WORKDIR /src
 
-# Copy source code and build
-COPY . .
 RUN GOPROXY=https://goproxy.cn GOPRIVATE=${GIT_HOST} make build
 
-FROM debian:stable-slim
+FROM debian:bookworm-slim
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
-        ca-certificates \
+		openssl  \
+		ca-certificates  \
         netbase \
-    && rm -rf /var/lib/apt/lists/ \
-    && apt-get autoremove -y && apt-get autoclean -y
+        && rm -rf /var/lib/apt/lists/ \
+        && apt-get autoremove -y && apt-get autoclean -y
 
-# Only copy binaries, no config files
-COPY --from=builder /src/bin/server /app/app-service
-
-WORKDIR /app
-
-EXPOSE 8000
-EXPOSE 9000
-
-CMD ["./app-service", "-conf", "/app/config/app-service-config.yaml"]
+COPY --from=builder /src/bin/ /usr/local/bin/
