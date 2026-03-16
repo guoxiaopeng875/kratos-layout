@@ -1,7 +1,6 @@
 package rocketmq
 
 import (
-	"context"
 	"fmt"
 	"time"
 
@@ -32,12 +31,6 @@ var (
 	NewFilterExpression = rmq.NewFilterExpression
 	// NewFilterExpressionWithType creates a filter expression with specified type.
 	NewFilterExpressionWithType = rmq.NewFilterExpressionWithType
-)
-
-// Filter expression types.
-const (
-	FilterTypeSQL92 = rmq.SQL92
-	FilterTypeTag   = rmq.TAG
 )
 
 // MessageHandler is the callback function for processing messages.
@@ -89,6 +82,7 @@ func NewPushConsumer(
 		return nil, nil, fmt.Errorf("handler cannot be nil")
 	}
 
+	// Configure SSL (once per process)
 	configureSSL(cfg.EnableSSL)
 
 	opts := []rmq.PushConsumerOption{
@@ -146,114 +140,4 @@ func (c *PushConsumer) Subscribe(topic string, filter *FilterExpression) error {
 // Unsubscribe unsubscribes from a topic.
 func (c *PushConsumer) Unsubscribe(topic string) error {
 	return c.client.Unsubscribe(topic)
-}
-
-// SimpleConsumer wraps RocketMQ v5 simple consumer for pull-based message receiving.
-type SimpleConsumer struct {
-	client rmq.SimpleConsumer
-	log    *log.Helper
-	cfg    *Config
-}
-
-// SimpleConsumerConfig holds configuration for simple consumer.
-type SimpleConsumerConfig struct {
-	*Config
-	AwaitDuration time.Duration
-}
-
-// NewSimpleConsumerConfigFromConfig creates a SimpleConsumerConfig from base Config.
-func NewSimpleConsumerConfigFromConfig(cfg *Config) *SimpleConsumerConfig {
-	return &SimpleConsumerConfig{
-		Config:        cfg,
-		AwaitDuration: 5 * time.Second,
-	}
-}
-
-// NewSimpleConsumer creates a new RocketMQ v5 simple consumer.
-func NewSimpleConsumer(
-	cfg *SimpleConsumerConfig,
-	subscriptions map[string]*FilterExpression,
-	logger log.Logger,
-) (*SimpleConsumer, func(), error) {
-	logHelper := log.NewHelper(log.With(logger, "module", "pkg/rocketmq/consumer"))
-
-	configureSSL(cfg.EnableSSL)
-
-	opts := []rmq.SimpleConsumerOption{
-		rmq.WithSimpleAwaitDuration(cfg.AwaitDuration),
-	}
-
-	if len(subscriptions) > 0 {
-		opts = append(opts, rmq.WithSimpleSubscriptionExpressions(subscriptions))
-	}
-
-	c, err := rmq.NewSimpleConsumer(cfg.ToRMQConfig(), opts...)
-	if err != nil {
-		return nil, nil, fmt.Errorf("create rocketmq simple consumer: %w", err)
-	}
-
-	logHelper.Infof("rocketmq simple consumer created, endpoint=%s, group=%s",
-		cfg.Endpoint, cfg.ConsumerGroup)
-
-	cleanup := func() {
-		logHelper.Info("shutting down rocketmq simple consumer")
-		if err := c.GracefulStop(); err != nil {
-			logHelper.Errorf("shutdown rocketmq simple consumer: %v", err)
-		}
-	}
-
-	return &SimpleConsumer{
-		client: c,
-		log:    logHelper,
-		cfg:    cfg.Config,
-	}, cleanup, nil
-}
-
-// Start starts the simple consumer.
-func (c *SimpleConsumer) Start() error {
-	if err := c.client.Start(); err != nil {
-		return fmt.Errorf("start rocketmq simple consumer: %w", err)
-	}
-	c.log.Info("rocketmq simple consumer started")
-	return nil
-}
-
-// Subscribe subscribes to a topic with filter expression.
-func (c *SimpleConsumer) Subscribe(topic string, filter *FilterExpression) error {
-	if err := c.client.Subscribe(topic, filter); err != nil {
-		return fmt.Errorf("subscribe to %s: %w", topic, err)
-	}
-	c.log.Infof("subscribed to topic: %s", topic)
-	return nil
-}
-
-// Unsubscribe unsubscribes from a topic.
-func (c *SimpleConsumer) Unsubscribe(topic string) error {
-	return c.client.Unsubscribe(topic)
-}
-
-// Receive receives messages from subscribed topics.
-// maxMessageNum specifies the maximum number of messages to receive.
-// invisibleDuration specifies how long the message is invisible to other consumers.
-func (c *SimpleConsumer) Receive(ctx context.Context, maxMessageNum int32, invisibleDuration time.Duration) ([]*MessageView, error) {
-	msgs, err := c.client.Receive(ctx, maxMessageNum, invisibleDuration)
-	if err != nil {
-		c.log.WithContext(ctx).Errorf("receive messages failed: %v", err)
-		return nil, fmt.Errorf("receive messages: %w", err)
-	}
-	return msgs, nil
-}
-
-// Ack acknowledges a message.
-func (c *SimpleConsumer) Ack(ctx context.Context, msg *MessageView) error {
-	if err := c.client.Ack(ctx, msg); err != nil {
-		c.log.WithContext(ctx).Errorf("ack message %s failed: %v", msg.GetMessageId(), err)
-		return fmt.Errorf("ack message: %w", err)
-	}
-	return nil
-}
-
-// ChangeInvisibleDuration changes the invisible duration of a message.
-func (c *SimpleConsumer) ChangeInvisibleDuration(msg *MessageView, invisibleDuration time.Duration) error {
-	return c.client.ChangeInvisibleDuration(msg, invisibleDuration)
 }

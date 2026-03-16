@@ -7,17 +7,16 @@ import (
 
 	rmq "github.com/apache/rocketmq-clients/golang/v5"
 	"github.com/apache/rocketmq-clients/golang/v5/credentials"
-
 	"github.com/go-kratos/kratos-layout/internal/conf"
 )
 
 var sslOnce sync.Once
 
-// configureSSL sets the global SSL flag once in a thread-safe manner.
-// The first call determines the value; subsequent calls are no-ops.
-func configureSSL(enable bool) {
+// configureSSL sets the global rmq.EnableSsl flag exactly once.
+// All producers and consumers in the same process share the same SSL setting.
+func configureSSL(enableSSL bool) {
 	sslOnce.Do(func() {
-		rmq.EnableSsl = enable
+		rmq.EnableSsl = enableSSL
 	})
 }
 
