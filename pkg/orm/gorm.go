@@ -7,7 +7,6 @@ import (
 	"strings"
 	"time"
 
-	"gorm.io/driver/mysql"
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
 )
@@ -27,6 +26,7 @@ type DB interface {
 
 // DBConfig is the configuration for the database
 type DBConfig struct {
+	Driver          string
 	Username        string
 	Password        string
 	Host            string
@@ -64,63 +64,91 @@ func (c *DBConfig) getConnMaxIdleTime() time.Duration {
 	return c.ConnMaxIdleTime
 }
 
-// quoteIdentifier escapes a SQL identifier to prevent SQL injection
-func quoteIdentifier(name string) string {
-	return "`" + strings.ReplaceAll(name, "`", "``") + "`"
+// dialect is the internal interface for database-specific SQL behavior
+type dialect interface {
+	buildDSN(config *DBConfig, dbName string) string
+	dialector(dsn string) gorm.Dialector
+	createDBSQL(dbName string) string
+	dropDBSQL(dbName string) string
+	listTablesSQL() string
+	clearTableSQL(table string) string
+	quoteIdentifier(name string) string
+	utilDBName() string
+}
+
+func getDialect(driver string) (dialect, error) {
+	switch strings.ToLower(driver) {
+	case "mysql":
+		return &mysqlDialect{}, nil
+	case "postgres", "postgresql", "":
+		return &postgresDialect{}, nil
+	default:
+		return nil, fmt.Errorf("unsupported database driver: %s", driver)
+	}
 }
 
 func MakeDBUtil(dbConfig *DBConfig) (DBUtil, error) {
-	return newGormMysql(dbConfig, true)
+	d, err := getDialect(dbConfig.Driver)
+	if err != nil {
+		return nil, err
+	}
+	return newGormDB(dbConfig, d, true)
 }
 
 func MakeDB(dbConfig *DBConfig) (DB, error) {
-	return newGormMysql(dbConfig, false)
+	d, err := getDialect(dbConfig.Driver)
+	if err != nil {
+		return nil, err
+	}
+	return newGormDB(dbConfig, d, false)
 }
 
-func newGormMysql(dbConfig *DBConfig, forUtil bool) (*gormMysql, error) {
-	gm := &gormMysql{dbConfig: dbConfig}
+func newGormDB(dbConfig *DBConfig, d dialect, forUtil bool) (*gormDB, error) {
+	gdb := &gormDB{dbConfig: dbConfig, d: d}
 
 	var err error
 	if forUtil {
-		err = gm.initUtilDB()
+		err = gdb.initUtilDB()
 	} else {
-		err = gm.initGormDB()
+		err = gdb.initGormDB()
 	}
 
 	if err != nil {
 		return nil, err
 	}
 
-	return gm, nil
+	return gdb, nil
 }
 
-type gormMysql struct {
+type gormDB struct {
 	dbConfig *DBConfig
+	d        dialect
 	db       *gorm.DB
 	utilDB   *gorm.DB
 	sqlDB    *sql.DB
 }
 
 // Close closes the database connection
-func (gm *gormMysql) Close() error {
-	if gm.sqlDB != nil {
-		return gm.sqlDB.Close()
+func (g *gormDB) Close() error {
+	if g.sqlDB != nil {
+		return g.sqlDB.Close()
 	}
 	return nil
 }
 
 // CreateDB creates the database if it does not exist
-func (gm *gormMysql) CreateDB() error {
-	if gm.utilDB == nil {
+func (g *gormDB) CreateDB() error {
+	if g.utilDB == nil {
 		return fmt.Errorf("util db is nil, please use MakeDBUtil first")
 	}
 
-	dbName := quoteIdentifier(gm.dbConfig.DBName)
-	charset := gm.dbConfig.getCharset()
-	createDBSQL := fmt.Sprintf("CREATE DATABASE IF NOT EXISTS %s DEFAULT CHARSET %s COLLATE %s_general_ci;",
-		dbName, charset, charset)
-
-	if err := gm.utilDB.Exec(createDBSQL).Error; err != nil {
+	createSQL := g.d.createDBSQL(g.dbConfig.DBName)
+	if err := g.utilDB.Exec(createSQL).Error; err != nil {
+		// PostgreSQL does not support IF NOT EXISTS for CREATE DATABASE,
+		// so we ignore the "already exists" error (SQLSTATE 42P04).
+		if strings.Contains(err.Error(), "already exists") {
+			return nil
+		}
 		return fmt.Errorf("create db failed: %w", err)
 	}
 
@@ -128,15 +156,13 @@ func (gm *gormMysql) CreateDB() error {
 }
 
 // DropDB drops the database if it exists
-func (gm *gormMysql) DropDB() error {
-	if gm.utilDB == nil {
+func (g *gormDB) DropDB() error {
+	if g.utilDB == nil {
 		return fmt.Errorf("util db is nil, please use MakeDBUtil first")
 	}
 
-	dbName := quoteIdentifier(gm.dbConfig.DBName)
-	dropDBSQL := fmt.Sprintf("DROP DATABASE IF EXISTS %s;", dbName)
-
-	if err := gm.utilDB.Exec(dropDBSQL).Error; err != nil {
+	dropSQL := g.d.dropDBSQL(g.dbConfig.DBName)
+	if err := g.utilDB.Exec(dropSQL).Error; err != nil {
 		return fmt.Errorf("drop db failed: %w", err)
 	}
 
@@ -144,30 +170,30 @@ func (gm *gormMysql) DropDB() error {
 }
 
 // GetUtilDB returns the utility database connection for database management operations
-func (gm *gormMysql) GetUtilDB() *gorm.DB {
-	return gm.utilDB
+func (g *gormDB) GetUtilDB() *gorm.DB {
+	return g.utilDB
 }
 
 // GetDB returns the main database connection
-func (gm *gormMysql) GetDB() *gorm.DB {
-	return gm.db
+func (g *gormDB) GetDB() *gorm.DB {
+	return g.db
 }
 
 // ClearAllData clears all data from all tables (only works in test environment with test/dev database)
-func (gm *gormMysql) ClearAllData() error {
+func (g *gormDB) ClearAllData() error {
 	if flag.Lookup("test.v") == nil {
 		return fmt.Errorf("ClearAllData can only be called in test environment")
 	}
 
-	if !strings.Contains(gm.dbConfig.DBName, "test") && !strings.Contains(gm.dbConfig.DBName, "dev") {
-		return fmt.Errorf("ClearAllData can only be used with test or dev database, got: %s", gm.dbConfig.DBName)
+	if !strings.Contains(g.dbConfig.DBName, "test") && !strings.Contains(g.dbConfig.DBName, "dev") {
+		return fmt.Errorf("ClearAllData can only be used with test or dev database, got: %s", g.dbConfig.DBName)
 	}
 
-	if gm.db == nil {
+	if g.db == nil {
 		return fmt.Errorf("db is nil, please init db first")
 	}
 
-	rs, err := gm.db.Raw("SHOW TABLES;").Rows()
+	rs, err := g.db.Raw(g.d.listTablesSQL()).Rows()
 	if err != nil {
 		return fmt.Errorf("get table list failed: %w", err)
 	}
@@ -182,8 +208,7 @@ func (gm *gormMysql) ClearAllData() error {
 			continue
 		}
 
-		quotedTable := quoteIdentifier(tName)
-		if err := gm.db.Exec(fmt.Sprintf("DELETE FROM %s", quotedTable)).Error; err != nil {
+		if err := g.db.Exec(g.d.clearTableSQL(tName)).Error; err != nil {
 			return fmt.Errorf("clear data from table %s failed: %w", tName, err)
 		}
 	}
@@ -196,74 +221,58 @@ func (gm *gormMysql) ClearAllData() error {
 }
 
 // openConnection creates a new database connection with the given DSN
-func (gm *gormMysql) openConnection(dsn string, silent bool) (gormDB *gorm.DB, sqlDB *sql.DB, err error) {
-	sqlDB, err = sql.Open("mysql", dsn)
-	if err != nil {
-		return nil, nil, fmt.Errorf("failed to connect database: %w", err)
-	}
-
-	sqlDB.SetMaxIdleConns(gm.dbConfig.MaxIdleConns)
-	sqlDB.SetMaxOpenConns(gm.dbConfig.MaxOpenConns)
-	sqlDB.SetConnMaxLifetime(gm.dbConfig.getConnMaxLifetime())
-	sqlDB.SetConnMaxIdleTime(gm.dbConfig.getConnMaxIdleTime())
-
+func (g *gormDB) openConnection(dsn string, silent bool) (gormDatabase *gorm.DB, sqlDatabase *sql.DB, err error) {
 	gormConfig := &gorm.Config{}
 	if silent {
 		gormConfig.Logger = logger.Default.LogMode(logger.Silent)
 	}
 
-	gormDB, err = gorm.Open(mysql.New(mysql.Config{Conn: sqlDB}), gormConfig)
+	gormDatabase, err = gorm.Open(g.d.dialector(dsn), gormConfig)
 	if err != nil {
-		sqlDB.Close()
 		return nil, nil, fmt.Errorf("failed to open gorm: %w", err)
 	}
 
-	return gormDB, sqlDB, nil
-}
-
-// buildDSN constructs a MySQL DSN string
-func (gm *gormMysql) buildDSN(dbName string) string {
-	dsn := fmt.Sprintf("%s:%s@tcp(%s:%s)/%s?charset=%s&parseTime=True&loc=Local",
-		gm.dbConfig.Username,
-		gm.dbConfig.Password,
-		gm.dbConfig.Host,
-		gm.dbConfig.Port,
-		dbName,
-		gm.dbConfig.getCharset())
-	if gm.dbConfig.MultiStatements {
-		dsn += "&multiStatements=true"
+	sqlDatabase, err = gormDatabase.DB()
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to get sql.DB: %w", err)
 	}
-	return dsn
+
+	sqlDatabase.SetMaxIdleConns(g.dbConfig.MaxIdleConns)
+	sqlDatabase.SetMaxOpenConns(g.dbConfig.MaxOpenConns)
+	sqlDatabase.SetConnMaxLifetime(g.dbConfig.getConnMaxLifetime())
+	sqlDatabase.SetConnMaxIdleTime(g.dbConfig.getConnMaxIdleTime())
+
+	return gormDatabase, sqlDatabase, nil
 }
 
-func (gm *gormMysql) initGormDB() error {
-	if gm.db != nil {
+func (g *gormDB) initGormDB() error {
+	if g.db != nil {
 		return fmt.Errorf("gorm db already initialized")
 	}
 
-	dsn := gm.buildDSN(gm.dbConfig.DBName)
-	db, sqlDB, err := gm.openConnection(dsn, true)
+	dsn := g.d.buildDSN(g.dbConfig, g.dbConfig.DBName)
+	db, sqlDB, err := g.openConnection(dsn, true)
 	if err != nil {
 		return err
 	}
 
-	gm.db = db
-	gm.sqlDB = sqlDB
+	g.db = db
+	g.sqlDB = sqlDB
 	return nil
 }
 
-func (gm *gormMysql) initUtilDB() error {
-	if gm.utilDB != nil {
+func (g *gormDB) initUtilDB() error {
+	if g.utilDB != nil {
 		return fmt.Errorf("util db already initialized")
 	}
 
-	dsn := gm.buildDSN("information_schema")
-	db, sqlDB, err := gm.openConnection(dsn, false)
+	dsn := g.d.buildDSN(g.dbConfig, g.d.utilDBName())
+	db, sqlDB, err := g.openConnection(dsn, false)
 	if err != nil {
 		return err
 	}
 
-	gm.utilDB = db
-	gm.sqlDB = sqlDB
+	g.utilDB = db
+	g.sqlDB = sqlDB
 	return nil
 }
