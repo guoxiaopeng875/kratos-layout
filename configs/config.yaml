@@ -8,10 +8,11 @@ server:
 
 data:
   database:
+    driver: postgres
     username: root
     password: root
     host: 127.0.0.1
-    port: 3306
+    port: 5432
     db_name: app_dev
     max_idle_conns: 10
     max_open_conns: 100

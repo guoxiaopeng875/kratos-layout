@@ -412,6 +412,7 @@ type Data_Database struct {
 	DbCharset       string                 `protobuf:"bytes,8,opt,name=db_charset,json=dbCharset,proto3" json:"db_charset,omitempty"`
 	ConnMaxLifetime *durationpb.Duration   `protobuf:"bytes,9,opt,name=conn_max_lifetime,json=connMaxLifetime,proto3" json:"conn_max_lifetime,omitempty"`
 	ConnMaxIdleTime *durationpb.Duration   `protobuf:"bytes,10,opt,name=conn_max_idle_time,json=connMaxIdleTime,proto3" json:"conn_max_idle_time,omitempty"`
+	Driver          string                 `protobuf:"bytes,11,opt,name=driver,proto3" json:"driver,omitempty"`
 	unknownFields   protoimpl.UnknownFields
 	sizeCache       protoimpl.SizeCache
 }
@@ -514,6 +515,13 @@ func (x *Data_Database) GetConnMaxIdleTime() *durationpb.Duration {
 		return x.ConnMaxIdleTime
 	}
 	return nil
+}
+
+func (x *Data_Database) GetDriver() string {
+	if x != nil {
+		return x.Driver
+	}
+	return ""
 }
 
 type Data_Redis struct {
@@ -639,10 +647,10 @@ const file_conf_conf_proto_rawDesc = "" +
 	"\x04GRPC\x12\x18\n" +
 	"\anetwork\x18\x01 \x01(\tR\anetwork\x12\x12\n" +
 	"\x04addr\x18\x02 \x01(\tR\x04addr\x123\n" +
-	"\atimeout\x18\x03 \x01(\v2\x19.google.protobuf.DurationR\atimeout\"\x8b\x06\n" +
+	"\atimeout\x18\x03 \x01(\v2\x19.google.protobuf.DurationR\atimeout\"\xa3\x06\n" +
 	"\x04Data\x125\n" +
 	"\bdatabase\x18\x01 \x01(\v2\x19.kratos.api.Data.DatabaseR\bdatabase\x12,\n" +
-	"\x05redis\x18\x02 \x01(\v2\x16.kratos.api.Data.RedisR\x05redis\x1a\xfd\x02\n" +
+	"\x05redis\x18\x02 \x01(\v2\x16.kratos.api.Data.RedisR\x05redis\x1a\x95\x03\n" +
 	"\bDatabase\x12\x1a\n" +
 	"\busername\x18\x01 \x01(\tR\busername\x12\x1a\n" +
 	"\bpassword\x18\x02 \x01(\tR\bpassword\x12\x12\n" +
@@ -655,7 +663,8 @@ const file_conf_conf_proto_rawDesc = "" +
 	"db_charset\x18\b \x01(\tR\tdbCharset\x12E\n" +
 	"\x11conn_max_lifetime\x18\t \x01(\v2\x19.google.protobuf.DurationR\x0fconnMaxLifetime\x12F\n" +
 	"\x12conn_max_idle_time\x18\n" +
-	" \x01(\v2\x19.google.protobuf.DurationR\x0fconnMaxIdleTime\x1a\x9d\x02\n" +
+	" \x01(\v2\x19.google.protobuf.DurationR\x0fconnMaxIdleTime\x12\x16\n" +
+	"\x06driver\x18\v \x01(\tR\x06driver\x1a\x9d\x02\n" +
 	"\x05Redis\x12\x18\n" +
 	"\anetwork\x18\x01 \x01(\tR\anetwork\x12\x12\n" +
 	"\x04addr\x18\x02 \x01(\tR\x04addr\x12\x1a\n" +

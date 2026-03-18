@@ -63,6 +63,7 @@ func NewData(c *conf.Data, logger log.Logger) (*Data, func(), error) {
 	logHelper := log.NewHelper(logger)
 
 	dbConf := &orm.DBConfig{
+		Driver:          c.Database.Driver,
 		Username:        c.Database.Username,
 		Password:        c.Database.Password,
 		Host:            c.Database.Host,

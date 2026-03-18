@@ -51,6 +51,7 @@ message Data {
     string db_charset = 8;
     google.protobuf.Duration conn_max_lifetime = 9;
     google.protobuf.Duration conn_max_idle_time = 10;
+    string driver = 11;
   }
   message Redis {
     string network = 1;
