@@ -9,8 +9,15 @@ message Bootstrap {
   Server server = 1;
   Data data = 2;
   RocketMQ rocketmq = 3;
-  // Add your business configuration here
-  // Example: YourDomain your_domain = 4;
+  Kafka kafka = 4;
+}
+
+// Kafka 消息队列配置
+message Kafka {
+  string brokers = 1;                            // 逗号分隔的 Broker 地址，如 "127.0.0.1:9092"
+  string group_id = 2;                           // Consumer Group ID
+  google.protobuf.Duration write_timeout = 3;    // 发送超时，默认 10s
+  google.protobuf.Duration read_timeout = 4;     // 读取超时，默认 10s
 }
 
 // RocketMQ 消息队列配置 (v5 SDK)
