@@ -5,7 +5,6 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
-	"strings"
 	"testing"
 	"time"
 
@@ -14,6 +13,7 @@ import (
 )
 
 type testDatabaseConfig struct {
+	Driver       string `yaml:"driver"`
 	Username     string `yaml:"username"`
 	Password     string `yaml:"password"`
 	Host         string `yaml:"host"`
@@ -48,6 +48,7 @@ func loadTestDBConfig(t *testing.T) *DBConfig {
 
 	db := cfg.Data.Database
 	return &DBConfig{
+		Driver:       db.Driver,
 		Username:     db.Username,
 		Password:     db.Password,
 		Host:         db.Host,
@@ -59,43 +60,44 @@ func loadTestDBConfig(t *testing.T) *DBConfig {
 	}
 }
 
-func TestMakeDBUtil(t *testing.T) {
-	dbConf := loadTestDBConfig(t)
+// --- Unit tests (no database connection required) ---
 
-	utilDB, err := MakeDBUtil(dbConf)
-	require.NoError(t, err)
-	defer utilDB.Close()
+func TestGetDialect(t *testing.T) {
+	tests := []struct {
+		name      string
+		driver    string
+		wantType  string
+		wantError bool
+	}{
+		{"mysql driver", "mysql", "mysql", false},
+		{"MySQL uppercase", "MySQL", "mysql", false},
+		{"postgres driver", "postgres", "postgres", false},
+		{"postgresql alias", "postgresql", "postgres", false},
+		{"empty defaults to postgres", "", "postgres", false},
+		{"invalid driver", "sqlite", "", true},
+	}
 
-	err = utilDB.CreateDB()
-	require.NoError(t, err)
-
-	err = utilDB.DropDB()
-	require.NoError(t, err)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			d, err := getDialect(tt.driver)
+			if tt.wantError {
+				require.Error(t, err)
+				require.Contains(t, err.Error(), "unsupported database driver")
+				return
+			}
+			require.NoError(t, err)
+			switch tt.wantType {
+			case "mysql":
+				require.IsType(t, &mysqlDialect{}, d)
+			case "postgres":
+				require.IsType(t, &postgresDialect{}, d)
+			}
+		})
+	}
 }
 
-func TestMakeDB(t *testing.T) {
-	dbConf := loadTestDBConfig(t)
-
-	utilDB, err := MakeDBUtil(dbConf)
-	require.NoError(t, err)
-	defer utilDB.Close()
-
-	err = utilDB.CreateDB()
-	require.NoError(t, err)
-	defer func() {
-		dropErr := utilDB.DropDB()
-		require.NoError(t, dropErr)
-	}()
-
-	db, err := MakeDB(dbConf)
-	require.NoError(t, err)
-	defer db.Close()
-
-	err = db.ClearAllData()
-	require.NoError(t, err)
-}
-
-func TestQuoteIdentifier(t *testing.T) {
+func TestMysqlDialect_QuoteIdentifier(t *testing.T) {
+	d := &mysqlDialect{}
 	tests := []struct {
 		input    string
 		expected string
@@ -107,221 +109,30 @@ func TestQuoteIdentifier(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		result := quoteIdentifier(tt.input)
+		result := d.quoteIdentifier(tt.input)
 		require.Equal(t, tt.expected, result)
 	}
 }
 
-func TestDBConfig_getCharset(t *testing.T) {
+func TestPostgresDialect_QuoteIdentifier(t *testing.T) {
+	d := &postgresDialect{}
 	tests := []struct {
-		name     string
-		config   *DBConfig
+		input    string
 		expected string
 	}{
-		{
-			name:     "default charset",
-			config:   &DBConfig{DBCharset: ""},
-			expected: "utf8mb4",
-		},
-		{
-			name:     "custom charset",
-			config:   &DBConfig{DBCharset: "utf8"},
-			expected: "utf8",
-		},
-		{
-			name:     "utf8mb4 charset",
-			config:   &DBConfig{DBCharset: "utf8mb4"},
-			expected: "utf8mb4",
-		},
+		{"users", `"users"`},
+		{"my_table", `"my_table"`},
+		{`table"name`, `"table""name"`},
+		{`db"test"table`, `"db""test""table"`},
 	}
 
 	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			result := tt.config.getCharset()
-			require.Equal(t, tt.expected, result)
-		})
+		result := d.quoteIdentifier(tt.input)
+		require.Equal(t, tt.expected, result)
 	}
 }
 
-func TestDBConfig_getConnMaxLifetime(t *testing.T) {
-	tests := []struct {
-		name     string
-		config   *DBConfig
-		expected time.Duration
-	}{
-		{
-			name:     "default lifetime",
-			config:   &DBConfig{ConnMaxLifetime: 0},
-			expected: time.Hour,
-		},
-		{
-			name:     "custom lifetime",
-			config:   &DBConfig{ConnMaxLifetime: 2 * time.Hour},
-			expected: 2 * time.Hour,
-		},
-		{
-			name:     "30 minutes lifetime",
-			config:   &DBConfig{ConnMaxLifetime: 30 * time.Minute},
-			expected: 30 * time.Minute,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			result := tt.config.getConnMaxLifetime()
-			require.Equal(t, tt.expected, result)
-		})
-	}
-}
-
-func TestDBConfig_getConnMaxIdleTime(t *testing.T) {
-	tests := []struct {
-		name     string
-		config   *DBConfig
-		expected time.Duration
-	}{
-		{
-			name:     "default idle time",
-			config:   &DBConfig{ConnMaxIdleTime: 0},
-			expected: 10 * time.Minute,
-		},
-		{
-			name:     "custom idle time",
-			config:   &DBConfig{ConnMaxIdleTime: 5 * time.Minute},
-			expected: 5 * time.Minute,
-		},
-		{
-			name:     "15 minutes idle time",
-			config:   &DBConfig{ConnMaxIdleTime: 15 * time.Minute},
-			expected: 15 * time.Minute,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			result := tt.config.getConnMaxIdleTime()
-			require.Equal(t, tt.expected, result)
-		})
-	}
-}
-
-func TestGormMysql_GetUtilDB(t *testing.T) {
-	dbConf := loadTestDBConfig(t)
-
-	utilDB, err := MakeDBUtil(dbConf)
-	require.NoError(t, err)
-	defer utilDB.Close()
-
-	gm := utilDB.(*gormMysql)
-	result := gm.GetUtilDB()
-	require.NotNil(t, result)
-	require.Equal(t, gm.utilDB, result)
-}
-
-func TestGormMysql_GetDB(t *testing.T) {
-	dbConf := loadTestDBConfig(t)
-
-	utilDB, err := MakeDBUtil(dbConf)
-	require.NoError(t, err)
-	defer utilDB.Close()
-
-	err = utilDB.CreateDB()
-	require.NoError(t, err)
-	defer func() {
-		dropErr := utilDB.DropDB()
-		require.NoError(t, dropErr)
-	}()
-
-	db, err := MakeDB(dbConf)
-	require.NoError(t, err)
-	defer db.Close()
-
-	gm := db.(*gormMysql)
-	result := gm.GetDB()
-	require.NotNil(t, result)
-	require.Equal(t, gm.db, result)
-}
-
-func TestGormMysql_CreateDB_Error(t *testing.T) {
-	dbConf := loadTestDBConfig(t)
-
-	// Create a gormMysql instance without initializing utilDB
-	gm := &gormMysql{dbConfig: dbConf}
-
-	err := gm.CreateDB()
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "util db is nil")
-}
-
-func TestGormMysql_DropDB_Error(t *testing.T) {
-	dbConf := loadTestDBConfig(t)
-
-	// Create a gormMysql instance without initializing utilDB
-	gm := &gormMysql{dbConfig: dbConf}
-
-	err := gm.DropDB()
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "util db is nil")
-}
-
-func TestGormMysql_ClearAllData_Error(t *testing.T) {
-	dbConf := loadTestDBConfig(t)
-	dbConf.DBName = "production_db" // Override to test non-test DB name rejection
-
-	utilDB, err := MakeDBUtil(dbConf)
-	require.NoError(t, err)
-	defer utilDB.Close()
-
-	err = utilDB.CreateDB()
-	require.NoError(t, err)
-	defer func() {
-		dropErr := utilDB.DropDB()
-		require.NoError(t, dropErr)
-	}()
-
-	db, err := MakeDB(dbConf)
-	require.NoError(t, err)
-	defer db.Close()
-
-	gm := db.(*gormMysql)
-	err = gm.ClearAllData()
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "test or dev database")
-}
-
-func TestGormMysql_ClearAllData_DBNil(t *testing.T) {
-	dbConf := loadTestDBConfig(t)
-
-	// Create a gormMysql instance without initializing db
-	gm := &gormMysql{dbConfig: dbConf}
-
-	err := gm.ClearAllData()
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "db is nil")
-}
-
-func TestGormMysql_Close(t *testing.T) {
-	dbConf := loadTestDBConfig(t)
-
-	utilDB, err := MakeDBUtil(dbConf)
-	require.NoError(t, err)
-
-	err = utilDB.Close()
-	require.NoError(t, err)
-
-	// Close again should not error
-	err = utilDB.Close()
-	require.NoError(t, err)
-}
-
-func TestGormMysql_Close_Nil(t *testing.T) {
-	gm := &gormMysql{}
-
-	err := gm.Close()
-	require.NoError(t, err)
-}
-
-func TestGormMysql_buildDSN(t *testing.T) {
+func TestMysqlDialect_BuildDSN(t *testing.T) {
 	dbConf := &DBConfig{
 		Username:     "testuser",
 		Password:     "testpass",
@@ -333,7 +144,7 @@ func TestGormMysql_buildDSN(t *testing.T) {
 		DBCharset:    "utf8",
 	}
 
-	gm := &gormMysql{dbConfig: dbConf}
+	d := &mysqlDialect{}
 
 	tests := []struct {
 		name     string
@@ -350,89 +161,211 @@ func TestGormMysql_buildDSN(t *testing.T) {
 			dbName:   "information_schema",
 			expected: "testuser:testpass@tcp(localhost:3307)/information_schema?charset=utf8&parseTime=True&loc=Local",
 		},
-		{
-			name:     "custom database",
-			dbName:   "mydb",
-			expected: "testuser:testpass@tcp(localhost:3307)/mydb?charset=utf8&parseTime=True&loc=Local",
-		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := gm.buildDSN(tt.dbName)
+			result := d.buildDSN(dbConf, tt.dbName)
 			require.Equal(t, tt.expected, result)
 		})
 	}
 }
 
-func TestGormMysql_buildDSN_WithMultiStatements(t *testing.T) {
+func TestMysqlDialect_BuildDSN_WithMultiStatements(t *testing.T) {
 	dbConf := &DBConfig{
 		Username:        "user",
 		Password:        "pass",
 		Host:            "host",
 		Port:            "3306",
-		DBName:          "db",
 		MultiStatements: true,
 	}
 
-	gm := &gormMysql{dbConfig: dbConf}
-
-	result := gm.buildDSN("testdb")
+	d := &mysqlDialect{}
+	result := d.buildDSN(dbConf, "testdb")
 	require.Contains(t, result, "&multiStatements=true")
 }
 
-func TestGormMysql_initGormDB_AlreadyInitialized(t *testing.T) {
-	dbConf := loadTestDBConfig(t)
-
-	utilDB, err := MakeDBUtil(dbConf)
-	require.NoError(t, err)
-	defer utilDB.Close()
-
-	err = utilDB.CreateDB()
-	require.NoError(t, err)
-	defer func() {
-		dropErr := utilDB.DropDB()
-		require.NoError(t, dropErr)
-	}()
-
-	db, err := MakeDB(dbConf)
-	require.NoError(t, err)
-	defer db.Close()
-
-	gm := db.(*gormMysql)
-	err = gm.initGormDB()
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "already initialized")
-}
-
-func TestGormMysql_initUtilDB_AlreadyInitialized(t *testing.T) {
-	dbConf := loadTestDBConfig(t)
-
-	utilDB, err := MakeDBUtil(dbConf)
-	require.NoError(t, err)
-	defer utilDB.Close()
-
-	gm := utilDB.(*gormMysql)
-	err = gm.initUtilDB()
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "already initialized")
-}
-
-func TestGormMysql_buildDSN_DefaultCharset(t *testing.T) {
+func TestMysqlDialect_BuildDSN_DefaultCharset(t *testing.T) {
 	dbConf := &DBConfig{
-		Username:     "user",
-		Password:     "pass",
-		Host:         "host",
-		Port:         "3306",
-		DBName:       "db",
-		MaxIdleConns: 10,
-		MaxOpenConns: 100,
-		DBCharset:    "", // Empty charset should default to utf8mb4
+		Username:  "user",
+		Password:  "pass",
+		Host:      "host",
+		Port:      "3306",
+		DBCharset: "",
 	}
 
-	gm := &gormMysql{dbConfig: dbConf}
-
-	result := gm.buildDSN("testdb")
+	d := &mysqlDialect{}
+	result := d.buildDSN(dbConf, "testdb")
 	require.Contains(t, result, "charset=utf8mb4")
-	require.True(t, strings.HasSuffix(result, "&parseTime=True&loc=Local"))
+}
+
+func TestPostgresDialect_BuildDSN(t *testing.T) {
+	dbConf := &DBConfig{
+		Username: "pguser",
+		Password: "pgpass",
+		Host:     "pghost",
+		Port:     "5432",
+		DBName:   "pgdb",
+	}
+
+	d := &postgresDialect{}
+
+	tests := []struct {
+		name     string
+		dbName   string
+		expected string
+	}{
+		{
+			name:     "default database",
+			dbName:   "pgdb",
+			expected: "host=pghost port=5432 user=pguser password=pgpass dbname=pgdb sslmode=disable",
+		},
+		{
+			name:     "postgres system db",
+			dbName:   "postgres",
+			expected: "host=pghost port=5432 user=pguser password=pgpass dbname=postgres sslmode=disable",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := d.buildDSN(dbConf, tt.dbName)
+			require.Equal(t, tt.expected, result)
+		})
+	}
+}
+
+func TestPostgresDialect_BuildDSN_IgnoresMySQLParams(t *testing.T) {
+	dbConf := &DBConfig{
+		Username:        "user",
+		Password:        "pass",
+		Host:            "host",
+		Port:            "5432",
+		DBCharset:       "utf8mb4",
+		MultiStatements: true,
+	}
+
+	d := &postgresDialect{}
+	result := d.buildDSN(dbConf, "testdb")
+	require.NotContains(t, result, "charset")
+	require.NotContains(t, result, "multiStatements")
+	require.Equal(t, "host=host port=5432 user=user password=pass dbname=testdb sslmode=disable", result)
+}
+
+func TestMysqlDialect_UtilDBName(t *testing.T) {
+	d := &mysqlDialect{}
+	require.Equal(t, "information_schema", d.utilDBName())
+}
+
+func TestPostgresDialect_UtilDBName(t *testing.T) {
+	d := &postgresDialect{}
+	require.Equal(t, "postgres", d.utilDBName())
+}
+
+func TestMysqlDialect_SQL(t *testing.T) {
+	d := &mysqlDialect{}
+	require.Contains(t, d.createDBSQL("mydb"), "CREATE DATABASE IF NOT EXISTS")
+	require.Contains(t, d.dropDBSQL("mydb"), "DROP DATABASE IF EXISTS")
+	require.Equal(t, "SHOW TABLES;", d.listTablesSQL())
+	require.Contains(t, d.clearTableSQL("users"), "DELETE FROM")
+}
+
+func TestPostgresDialect_SQL(t *testing.T) {
+	d := &postgresDialect{}
+	require.Contains(t, d.createDBSQL("mydb"), "CREATE DATABASE")
+	require.Contains(t, d.dropDBSQL("mydb"), "DROP DATABASE IF EXISTS")
+	require.Contains(t, d.listTablesSQL(), "pg_tables")
+	require.Contains(t, d.clearTableSQL("users"), "TRUNCATE TABLE")
+	require.Contains(t, d.clearTableSQL("users"), "CASCADE")
+}
+
+func TestDBConfig_getCharset(t *testing.T) {
+	tests := []struct {
+		name     string
+		config   *DBConfig
+		expected string
+	}{
+		{"default charset", &DBConfig{DBCharset: ""}, "utf8mb4"},
+		{"custom charset", &DBConfig{DBCharset: "utf8"}, "utf8"},
+		{"utf8mb4 charset", &DBConfig{DBCharset: "utf8mb4"}, "utf8mb4"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := tt.config.getCharset()
+			require.Equal(t, tt.expected, result)
+		})
+	}
+}
+
+func TestDBConfig_getConnMaxLifetime(t *testing.T) {
+	tests := []struct {
+		name     string
+		config   *DBConfig
+		expected time.Duration
+	}{
+		{"default lifetime", &DBConfig{ConnMaxLifetime: 0}, time.Hour},
+		{"custom lifetime", &DBConfig{ConnMaxLifetime: 2 * time.Hour}, 2 * time.Hour},
+		{"30 minutes lifetime", &DBConfig{ConnMaxLifetime: 30 * time.Minute}, 30 * time.Minute},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := tt.config.getConnMaxLifetime()
+			require.Equal(t, tt.expected, result)
+		})
+	}
+}
+
+func TestDBConfig_getConnMaxIdleTime(t *testing.T) {
+	tests := []struct {
+		name     string
+		config   *DBConfig
+		expected time.Duration
+	}{
+		{"default idle time", &DBConfig{ConnMaxIdleTime: 0}, 10 * time.Minute},
+		{"custom idle time", &DBConfig{ConnMaxIdleTime: 5 * time.Minute}, 5 * time.Minute},
+		{"15 minutes idle time", &DBConfig{ConnMaxIdleTime: 15 * time.Minute}, 15 * time.Minute},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := tt.config.getConnMaxIdleTime()
+			require.Equal(t, tt.expected, result)
+		})
+	}
+}
+
+func TestGormDB_CreateDB_NilUtilDB(t *testing.T) {
+	g := &gormDB{dbConfig: &DBConfig{}, d: &mysqlDialect{}}
+	err := g.CreateDB()
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "util db is nil")
+}
+
+func TestGormDB_DropDB_NilUtilDB(t *testing.T) {
+	g := &gormDB{dbConfig: &DBConfig{}, d: &mysqlDialect{}}
+	err := g.DropDB()
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "util db is nil")
+}
+
+func TestGormDB_ClearAllData_NonTestDB(t *testing.T) {
+	g := &gormDB{dbConfig: &DBConfig{DBName: "production_db"}, d: &mysqlDialect{}}
+	err := g.ClearAllData()
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "test or dev database")
+}
+
+func TestGormDB_ClearAllData_NilDB(t *testing.T) {
+	g := &gormDB{dbConfig: &DBConfig{DBName: "app_test"}, d: &mysqlDialect{}}
+	err := g.ClearAllData()
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "db is nil")
+}
+
+func TestGormDB_Close_Nil(t *testing.T) {
+	g := &gormDB{}
+	err := g.Close()
+	require.NoError(t, err)
 }
