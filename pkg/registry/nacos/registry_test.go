@@ -179,11 +179,11 @@ func TestBuildMetadata(t *testing.T) {
 func TestRegister_EmptyName(t *testing.T) {
 	r := New(nil)
 	si := &registry.ServiceInstance{Name: ""}
-	err := r.Register(nil, si)
+	err := r.Register(context.TODO(), si)
 	if err == nil {
 		t.Fatal("expected error for empty name")
 	}
-	if err != ErrServiceInstanceNameEmpty {
+	if !errors.Is(err, ErrServiceInstanceNameEmpty) {
 		t.Errorf("expected ErrServiceInstanceNameEmpty, got %v", err)
 	}
 }
@@ -194,7 +194,7 @@ func TestRegister_InvalidEndpoint(t *testing.T) {
 		Name:      "test-service",
 		Endpoints: []string{"://invalid"},
 	}
-	err := r.Register(nil, si)
+	err := r.Register(context.TODO(), si)
 	if err == nil {
 		t.Fatal("expected error for invalid endpoint")
 	}
@@ -205,7 +205,7 @@ func TestDeregister_InvalidEndpoint(t *testing.T) {
 	si := &registry.ServiceInstance{
 		Endpoints: []string{"://invalid"},
 	}
-	err := r.Deregister(nil, si)
+	err := r.Deregister(context.TODO(), si)
 	if err == nil {
 		t.Fatal("expected error for invalid endpoint")
 	}

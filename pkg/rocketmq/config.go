@@ -7,6 +7,7 @@ import (
 
 	rmq "github.com/apache/rocketmq-clients/golang/v5"
 	"github.com/apache/rocketmq-clients/golang/v5/credentials"
+
 	"github.com/go-kratos/kratos-layout/internal/conf"
 )
 

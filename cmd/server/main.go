@@ -60,7 +60,8 @@ func init() {
 }
 
 func newApp(logger log.Logger, gs *grpc.Server, hs *http.Server, r *nacos.Registry, jobs *job.Registry) *kratos.App {
-	servers := []transport.Server{gs, hs}
+	servers := make([]transport.Server, 0, 2+len(jobs.Servers()))
+	servers = append(servers, gs, hs)
 	servers = append(servers, jobs.Servers()...)
 	return kratos.New(
 		kratos.ID(id),

@@ -5,8 +5,9 @@ import (
 	"time"
 
 	"github.com/apache/rocketmq-clients/golang/v5/credentials"
-	"github.com/go-kratos/kratos-layout/internal/conf"
 	"google.golang.org/protobuf/types/known/durationpb"
+
+	"github.com/go-kratos/kratos-layout/internal/conf"
 )
 
 func TestConfigureSSL(t *testing.T) {

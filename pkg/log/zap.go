@@ -40,7 +40,7 @@ func (l *ZapLogger) Log(level log.Level, keyvals ...interface{}) error {
 	// Add caller as the first field
 	data := []zap.Field{zap.String("caller", getCaller())}
 	// Zap.Field is used when keyvals pairs appear
-	for i := 0; i < len(keyvals); i += 2 {
+	for i := 0; i+1 < len(keyvals); i += 2 {
 		data = append(data, zap.Any(fmt.Sprint(keyvals[i]), fmt.Sprint(keyvals[i+1])))
 	}
 	switch level {

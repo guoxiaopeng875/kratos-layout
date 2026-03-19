@@ -41,7 +41,7 @@ func NewConsumer(cfg *Config, topic string, logger log.Logger) (*Consumer, func(
 	return &Consumer{reader: r, log: logHelper}, cleanup, nil
 }
 
-// ReadMessage blocks until a message is available or ctx is cancelled.
+// ReadMessage blocks until a message is available or ctx is canceled.
 // Returns the raw kafka.Message; the caller must call CommitMessages after processing.
 func (c *Consumer) ReadMessage(ctx context.Context) (kafka.Message, error) {
 	msg, err := c.reader.FetchMessage(ctx)
