@@ -73,9 +73,9 @@ test:
 	go test -v -race $$(go list ./... | grep -v /test/integration/)
 
 .PHONY: test-integration
-# run integration tests
+# run integration tests (testcontainers + test/integration)
 test-integration:
-	go test -v -race -timeout 15m ./test/integration/...
+	go test -v -race -tags integration -timeout 15m ./pkg/... ./test/integration/...
 
 .PHONY: check
 # format code, run tests and lint
@@ -131,6 +131,12 @@ migrate-diff:
 # rehash migration directory after manual edits
 migrate-hash:
 	atlas migrate hash --env local
+
+.PHONY: migrate-reset
+# reset and regenerate all migration files from scratch
+migrate-reset:
+	rm -f scripts/sql/migration/*.sql scripts/sql/migration/atlas.sum
+	atlas migrate diff --env local
 
 .PHONY: reset-db
 # reset database (drop and recreate)

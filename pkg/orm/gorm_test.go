@@ -1,64 +1,11 @@
 package orm
 
 import (
-	"fmt"
-	"os"
-	"path/filepath"
-	"runtime"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/require"
-	"gopkg.in/yaml.v3"
 )
-
-type testDatabaseConfig struct {
-	Driver       string `yaml:"driver"`
-	Username     string `yaml:"username"`
-	Password     string `yaml:"password"`
-	Host         string `yaml:"host"`
-	Port         int    `yaml:"port"`
-	DBName       string `yaml:"db_name"`
-	MaxIdleConns int    `yaml:"max_idle_conns"`
-	MaxOpenConns int    `yaml:"max_open_conns"`
-	DBCharset    string `yaml:"db_charset"`
-}
-
-type testYAMLConfig struct {
-	Data struct {
-		Database testDatabaseConfig `yaml:"database"`
-	} `yaml:"data"`
-}
-
-func loadTestDBConfig(t *testing.T) *DBConfig {
-	t.Helper()
-
-	_, currentFile, _, ok := runtime.Caller(0)
-	require.True(t, ok, "failed to get current file path")
-
-	projectRoot := filepath.Dir(filepath.Dir(filepath.Dir(currentFile)))
-	configPath := filepath.Join(projectRoot, "configs", ".local.config.yaml")
-
-	data, err := os.ReadFile(configPath)
-	require.NoError(t, err, "failed to read config file: %s", configPath)
-
-	var cfg testYAMLConfig
-	err = yaml.Unmarshal(data, &cfg)
-	require.NoError(t, err, "failed to parse config file")
-
-	db := cfg.Data.Database
-	return &DBConfig{
-		Driver:       db.Driver,
-		Username:     db.Username,
-		Password:     db.Password,
-		Host:         db.Host,
-		Port:         fmt.Sprintf("%d", db.Port),
-		DBName:       db.DBName,
-		MaxIdleConns: db.MaxIdleConns,
-		MaxOpenConns: db.MaxOpenConns,
-		DBCharset:    db.DBCharset,
-	}
-}
 
 // --- Unit tests (no database connection required) ---
 
