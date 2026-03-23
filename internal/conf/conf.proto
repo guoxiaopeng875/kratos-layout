@@ -8,8 +8,7 @@ import "google/protobuf/duration.proto";
 message Bootstrap {
   Server server = 1;
   Data data = 2;
-  RocketMQ rocketmq = 3;
-  Kafka kafka = 4;
+  Kafka kafka = 3;
 }
 
 // Kafka 消息队列配置
@@ -18,17 +17,6 @@ message Kafka {
   string group_id = 2;                           // Consumer Group ID
   google.protobuf.Duration write_timeout = 3;    // 发送超时，默认 10s
   google.protobuf.Duration read_timeout = 4;     // 读取超时，默认 10s
-}
-
-// RocketMQ 消息队列配置 (v5 SDK)
-message RocketMQ {
-  string name_servers = 1;              // gRPC Proxy 端点地址 (如 127.0.0.1:8081)
-  string producer_group = 2;            // Producer/Consumer 组名
-  google.protobuf.Duration send_timeout = 3;  // 发送超时时间
-  int32 retry_times = 4;                // 重试次数
-  string access_key = 5;                // 访问密钥（可选）
-  string secret_key = 6;                // 密钥（可选）
-  string env = 7;                       // 环境标识，非空时作为 topic 后缀 (如 "dev" → topic_dev)
 }
 
 message Server {

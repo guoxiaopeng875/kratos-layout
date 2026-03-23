@@ -14,7 +14,6 @@ A production-ready Go microservice template based on [Kratos](https://github.com
 - **Development Environment**: Docker Compose with MySQL, Redis, and Nacos
 - **Background Jobs**: Pattern for implementing background tasks as Kratos servers
 - **Service Registry**: Nacos integration for service registration and discovery
-- **Message Queue**: RocketMQ v5 SDK integration (producer & consumer)
 - **Code Quality**: golangci-lint configuration and pre-commit hooks
 
 ## Project Structure
@@ -37,8 +36,7 @@ A production-ready Go microservice template based on [Kratos](https://github.com
 │   ├── env/                # Environment variable utilities
 │   ├── log/                # Zap logger wrapper
 │   ├── orm/                # GORM database utilities
-│   ├── registry/           # Nacos service registry
-│   └── rocketmq/           # RocketMQ message queue client
+│   └── registry/           # Nacos service registry
 ├── deploy/                 # Deployment configurations
 │   ├── base/               # Base Docker image (Go dependencies)
 │   └── local/              # Local development (Docker Compose)
@@ -182,11 +180,6 @@ data:
     dial_timeout: 5s
     read_timeout: 0.5s
     write_timeout: 0.5s
-
-rocketmq:
-  name_servers: "127.0.0.1:8081"  # RocketMQ gRPC Proxy endpoint
-  send_timeout: 3s
-  retry_times: 2
 ```
 
 ## Makefile Commands

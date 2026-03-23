@@ -27,11 +27,6 @@ data:
     read_timeout: 0.5s
     write_timeout: 0.5s
 
-rocketmq:
-  name_servers: "127.0.0.1:8081"  # RocketMQ gRPC Proxy endpoint
-  send_timeout: 3s
-  retry_times: 2
-
 kafka:
   brokers: "127.0.0.1:9092"
   group_id: "app-svc"

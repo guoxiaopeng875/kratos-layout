@@ -2,10 +2,10 @@ package main
 
 import (
 	"flag"
+	"fmt"
 	"os"
 	"strings"
 
-	"github.com/go-kratos/kratos/contrib/config/apollo/v2"
 	"github.com/go-kratos/kratos/v2"
 	"github.com/go-kratos/kratos/v2/config"
 	"github.com/go-kratos/kratos/v2/config/file"
@@ -101,7 +101,7 @@ func run() error {
 		return err
 	}
 
-	app, appCleanup, err := wireApp(bc.Server, bc.Data, bc.Rocketmq, r, logger)
+	app, appCleanup, err := wireApp(bc.Server, bc.Data, r, logger)
 	if err != nil {
 		logHelper.Errorf("failed to wire app: %v", err)
 		return err
@@ -116,45 +116,23 @@ func run() error {
 	return nil
 }
 
-// loadConfig loads configuration from file or Apollo.
-// Priority: -conf flag > CONFIG_FILE env > Apollo
+// loadConfig loads configuration from file.
+// Priority: -conf flag > CONFIG_FILE env
 func loadConfig() (*conf.Bootstrap, func(), error) {
 	confFile := flagConf
 	if confFile == "" {
 		confFile = env.GetOrDefault("CONFIG_FILE", "")
 	}
 
-	var bc conf.Bootstrap
-
-	// Use file config if specified
-	if confFile != "" {
-		c := config.New(
-			config.WithSource(
-				file.NewSource(confFile),
-			),
-		)
-
-		if err := c.Load(); err != nil {
-			return nil, nil, err
-		}
-
-		if err := c.Scan(&bc); err != nil {
-			return nil, nil, err
-		}
-
-		return &bc, func() { c.Close() }, nil
+	if confFile == "" {
+		return nil, nil, fmt.Errorf("config file not specified: use -conf flag or CONFIG_FILE env")
 	}
 
-	// Fall back to Apollo
+	var bc conf.Bootstrap
+
 	c := config.New(
 		config.WithSource(
-			apollo.NewSource(
-				apollo.WithAppID(env.GetOrDefault("APOLLO_APP_ID", Name)),
-				apollo.WithCluster(env.GetOrDefault("APOLLO_CLUSTER", "dev")),
-				apollo.WithEndpoint(env.GetOrDefault("APOLLO_ENDPOINT", "http://localhost:8080")),
-				apollo.WithNamespace(env.GetOrDefault("APOLLO_NAMESPACE", "application,bootstrap.yaml")),
-				apollo.WithSecret(env.GetOrDefault("APOLLO_SECRET", "fc4cacadc4cb486b91419d67f6d7918b")),
-			),
+			file.NewSource(confFile),
 		),
 	)
 
@@ -162,7 +140,7 @@ func loadConfig() (*conf.Bootstrap, func(), error) {
 		return nil, nil, err
 	}
 
-	if err := c.Value("bootstrap").Scan(&bc); err != nil {
+	if err := c.Scan(&bc); err != nil {
 		return nil, nil, err
 	}
 
