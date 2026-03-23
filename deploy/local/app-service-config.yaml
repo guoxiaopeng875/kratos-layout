@@ -7,25 +7,24 @@ server:
     timeout: 1s
 data:
   database:
+    driver: postgres
     username: root
     password: root
-    host: host.docker.internal
-    port: 3306
+    host: 127.0.0.1
+    port: 5432
     db_name: app_local
     max_idle_conns: 10
     max_open_conns: 100
-    db_charset: utf8mb4
     conn_max_lifetime: 3600s
     conn_max_idle_time: 3600s
   redis:
-    addr: host.docker.internal:6379
+    addr: 127.0.0.1:6379
     dial_timeout: 1s
     read_timeout: 1s
     write_timeout: 1s
 
-rocketmq:
-  name_servers: "host.docker.internal:8081"  # RocketMQ gRPC Proxy endpoint
-  send_timeout: 3s
-  retry_times: 2
-
-
+kafka:
+  brokers: "127.0.0.1:9092"
+  group_id: "app-svc"
+  write_timeout: 10s
+  read_timeout: 10s

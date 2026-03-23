@@ -113,13 +113,11 @@ hooks:
 # initialize database schema
 init-db:
 	@echo "Dropping existing test database..."
-	docker exec -i kratos-mysql mysql -uroot -proot -e "DROP DATABASE IF EXISTS app_local;"
+	docker exec -i kratos-postgres psql -U root -d postgres -c "DROP DATABASE IF EXISTS app_local;"
 	@echo "Creating database..."
-	docker exec -i kratos-mysql mysql -uroot -proot -e "CREATE DATABASE app_local CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;"
+	docker exec -i kratos-postgres psql -U root -d postgres -c "CREATE DATABASE app_local;"
 	@echo "Creating tables..."
-	cat scripts/sql/migration/*.sql | docker exec -i kratos-mysql mysql -uroot -proot app_local
-	@echo "Initializing test data..."
-	#cat deploy/local/init_data.sql | docker exec -i kratos-mysql mysql -uroot -proot app_local
+	cat scripts/sql/migration/*.sql | docker exec -i kratos-postgres psql -U root -d app_local
 	@echo "Test database initialized!"
 
 .PHONY: migrate-diff

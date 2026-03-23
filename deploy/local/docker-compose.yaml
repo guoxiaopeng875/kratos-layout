@@ -1,23 +1,14 @@
-x-image: &image
-  image: xxx/app-service:v1.0.1-dev
-  platform: linux/amd64
-
 services:
   app-service:
-    <<: *image
+    build:
+      context: ../../
+      dockerfile: deploy/local/Dockerfile
+    container_name: kratos-app-service
     network_mode: "host"
-    container_name: wallet-service
-    command: ["wallet-service", "-conf", "/app/config/wallet-service-config.yaml"]
+    command: ["server", "-conf", "/app/config/app-service-config.yaml"]
     volumes:
-      - ./wallet-service-config.yaml:/app/config/wallet-service-config.yaml:ro
-      - ./init_data.sql:/app/config/init_data.sql:ro
-      - /home/user_00/mpc-wallet/certs:/app/config/certs:ro
-      - /home/user_00/mpc-wallet/keys:/app/config/keys:ro
-      - ./caller-config.json:/app/config/caller-config.json:ro
-      - ./clientkey.json:/app/config/clientkey.json:ro
-      - ./PrivateKmsCA_kst-hkk69719ad00mouuxp0c9.pem:/app/config/PrivateKmsCA_kst-hkk69719ad00mouuxp0c9.pem:ro
+      - ./app-service-config.yaml:/app/config/app-service-config.yaml:ro
     environment:
       - LOG_LEVEL=info
-      - NACOS_SERVER_ADDRS=mse-a25885c14-nacos-ans.mse.aliyuncs.com:8848
-      - NACOS_NAMESPACE_ID=xfin_nacos_dev
+      - NACOS_SERVER_ADDRS=127.0.0.1:8848
     restart: unless-stopped
