@@ -109,39 +109,17 @@ hooks:
 	@echo "Git hooks installed."
 
 
-.PHONY: init-db
-# initialize database schema
-init-db:
-	@echo "Dropping existing test database..."
-	docker exec -i kratos-postgres psql -U root -d postgres -c "DROP DATABASE IF EXISTS app_local;"
-	@echo "Creating database..."
-	docker exec -i kratos-postgres psql -U root -d postgres -c "CREATE DATABASE app_local;"
-	@echo "Creating tables..."
-	cat scripts/sql/migration/*.sql | docker exec -i kratos-postgres psql -U root -d app_local
-	@echo "Test database initialized!"
-
-.PHONY: migrate-diff
-# generate migration SQL from GORM model changes
-migrate-diff:
-	atlas migrate diff --env local
-
-.PHONY: migrate-hash
-# rehash migration directory after manual edits
-migrate-hash:
-	atlas migrate hash --env local
-
-.PHONY: migrate-reset
-# reset and regenerate all migration files from scratch
-migrate-reset:
-	rm -f scripts/sql/migration/*.sql scripts/sql/migration/atlas.sum
-	atlas migrate diff --env local
+.PHONY: migrate
+# run database migration (create db + auto migrate tables)
+migrate:
+	go run ./cmd/migrate/ -conf configs/config.yaml
 
 .PHONY: reset-db
 # reset database (drop and recreate)
 reset-db:
 	@echo "Clearing Redis cache..."
 	docker exec -i kratos-redis redis-cli FLUSHALL || true
-	$(MAKE) init-db
+	$(MAKE) migrate
 
 .PHONY: run
 # start all services
