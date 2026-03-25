@@ -34,6 +34,6 @@ kafka:
   read_timeout: 10s
 
 cron_tasks:
-  # - name: "example_job"
-  #   schedule: "*/5 * * * *"
-  #   enabled: true
+  - name: "helloworld"
+    schedule: "@every 5s"
+    enabled: true
