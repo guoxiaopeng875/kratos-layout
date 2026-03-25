@@ -76,11 +76,16 @@ type dialect interface {
 	utilDBName() string
 }
 
+const (
+	DriverPostgres = "postgres"
+	DriverMySQL    = "mysql"
+)
+
 func getDialect(driver string) (dialect, error) {
 	switch strings.ToLower(driver) {
-	case "mysql":
+	case DriverMySQL:
 		return &mysqlDialect{}, nil
-	case "postgres", "postgresql", "":
+	case DriverPostgres, "postgresql", "":
 		return &postgresDialect{}, nil
 	default:
 		return nil, fmt.Errorf("unsupported database driver: %s", driver)
