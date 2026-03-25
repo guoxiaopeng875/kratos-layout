@@ -10,7 +10,6 @@ import (
 	"github.com/go-kratos/kratos-layout/internal/biz"
 	"github.com/go-kratos/kratos-layout/internal/conf"
 	"github.com/go-kratos/kratos-layout/internal/data"
-	"github.com/go-kratos/kratos-layout/internal/job"
 	"github.com/go-kratos/kratos-layout/internal/server"
 	"github.com/go-kratos/kratos-layout/internal/service"
 	"github.com/go-kratos/kratos-layout/pkg/registry/nacos"
@@ -33,8 +32,7 @@ func wireApp(confServer *conf.Server, confData *conf.Data, registry *nacos.Regis
 	greeterService := service.NewGreeterService(greeterUsecase)
 	grpcServer := server.NewGRPCServer(confServer, greeterService, logger)
 	httpServer := server.NewHTTPServer(confServer, greeterService, logger)
-	jobRegistry := &job.Registry{}
-	app := newApp(logger, grpcServer, httpServer, registry, jobRegistry)
+	app := newApp(logger, grpcServer, httpServer, registry)
 	return app, func() {
 		cleanup()
 	}, nil

@@ -11,7 +11,6 @@ import (
 	"github.com/go-kratos/kratos/v2/config/file"
 	"github.com/go-kratos/kratos/v2/encoding/json"
 	"github.com/go-kratos/kratos/v2/log"
-	"github.com/go-kratos/kratos/v2/transport"
 	"github.com/go-kratos/kratos/v2/transport/grpc"
 	"github.com/go-kratos/kratos/v2/transport/http"
 	_ "go.uber.org/automaxprocs"
@@ -19,7 +18,6 @@ import (
 	"google.golang.org/protobuf/encoding/protojson"
 
 	"github.com/go-kratos/kratos-layout/internal/conf"
-	"github.com/go-kratos/kratos-layout/internal/job"
 	"github.com/go-kratos/kratos-layout/pkg/env"
 	zapLog "github.com/go-kratos/kratos-layout/pkg/log"
 	"github.com/go-kratos/kratos-layout/pkg/registry"
@@ -59,17 +57,14 @@ func init() {
 	}
 }
 
-func newApp(logger log.Logger, gs *grpc.Server, hs *http.Server, r *nacos.Registry, jobs *job.Registry) *kratos.App {
-	servers := make([]transport.Server, 0, 2+len(jobs.Servers()))
-	servers = append(servers, gs, hs)
-	servers = append(servers, jobs.Servers()...)
+func newApp(logger log.Logger, gs *grpc.Server, hs *http.Server, r *nacos.Registry) *kratos.App {
 	return kratos.New(
 		kratos.ID(id),
 		kratos.Name(Name),
 		kratos.Version(Version),
 		kratos.Metadata(map[string]string{}),
 		kratos.Logger(logger),
-		kratos.Server(servers...),
+		kratos.Server(gs, hs),
 		kratos.Registrar(r),
 	)
 }

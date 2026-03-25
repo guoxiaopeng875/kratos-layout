@@ -13,5 +13,5 @@ import (
 )
 
 func wireApp([]*conf.CronTask, log.Logger) (*kratos.App, func(), error) {
-	panic(wire.Build(job.CronProviderSet, newApp))
+	panic(wire.Build(job.ProviderSet, newApp))
 }
