@@ -32,3 +32,8 @@ kafka:
   group_id: "app-svc"
   write_timeout: 10s
   read_timeout: 10s
+
+cron_tasks:
+  # - name: "example_job"
+  #   schedule: "*/5 * * * *"
+  #   enabled: true

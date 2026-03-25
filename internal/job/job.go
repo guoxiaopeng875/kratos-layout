@@ -14,7 +14,13 @@ func (r *Registry) Servers() []transport.Server {
 	return []transport.Server{}
 }
 
-// ProviderSet is the job providers.
+// ProviderSet is the job providers for cmd/server.
 var ProviderSet = wire.NewSet(
 	wire.Struct(new(Registry), "*"),
+)
+
+// CronProviderSet is the provider set for cmd/cron.
+var CronProviderSet = wire.NewSet(
+	NewCronServer,
+	wire.Value([]CronJob(nil)),
 )

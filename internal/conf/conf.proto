@@ -9,6 +9,14 @@ message Bootstrap {
   Server server = 1;
   Data data = 2;
   Kafka kafka = 3;
+  repeated CronTask cron_tasks = 4;
+}
+
+// CronTask 定时任务配置
+message CronTask {
+  string name = 1;      // 任务名，匹配 CronJob.Name()
+  string schedule = 2;  // cron 表达式，如 "0 8 * * *"
+  bool enabled = 3;     // 是否启用
 }
 
 // Kafka 消息队列配置
