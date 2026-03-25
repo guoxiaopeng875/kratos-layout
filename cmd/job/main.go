@@ -41,7 +41,7 @@ func init() {
 	}
 
 	if Name == "" {
-		Name = env.GetOrDefault("SERVICE_NAME", "xxx-cron")
+		Name = env.GetOrDefault("SERVICE_NAME", "xxx-job")
 	}
 
 	if Version == "" {
