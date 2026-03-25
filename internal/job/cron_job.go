@@ -18,12 +18,13 @@ type CronJob interface {
 
 // CronServer wraps robfig/cron as a Kratos transport.Server.
 type CronServer struct {
-	cron   *cron.Cron
-	log    *log.Helper
-	tasks  []*conf.CronTask
-	jobs   map[string]CronJob
-	stopCh chan struct{}
-	once   sync.Once
+	cron    *cron.Cron
+	log     *log.Helper
+	tasks   []*conf.CronTask
+	jobs    map[string]CronJob
+	running sync.Map // tracks running jobs by name
+	stopCh  chan struct{}
+	once    sync.Once
 }
 
 // NewCronServer creates a CronServer with the given config tasks and registered jobs.
@@ -58,6 +59,11 @@ func (s *CronServer) Start(ctx context.Context) error {
 		jobName := task.Name
 		jobFn := j
 		if _, err := s.cron.AddFunc(task.Schedule, func() {
+			if _, loaded := s.running.LoadOrStore(jobName, struct{}{}); loaded {
+				s.log.Warnf("cron job %q is still running, skipping this trigger", jobName)
+				return
+			}
+			defer s.running.Delete(jobName)
 			if err := jobFn.Execute(ctx); err != nil {
 				s.log.Errorf("cron job %q execution failed: %v", jobName, err)
 			}

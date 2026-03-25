@@ -13,13 +13,20 @@ import (
 
 // testCronJob is a simple CronJob for testing.
 type testCronJob struct {
-	name  string
-	count atomic.Int32
-	err   error
+	name    string
+	count   atomic.Int32
+	err     error
+	execDur time.Duration // if set, simulate slow execution
 }
 
-func (j *testCronJob) Name() string                    { return j.name }
-func (j *testCronJob) Execute(_ context.Context) error { j.count.Add(1); return j.err }
+func (j *testCronJob) Name() string { return j.name }
+func (j *testCronJob) Execute(_ context.Context) error {
+	j.count.Add(1)
+	if j.execDur > 0 {
+		time.Sleep(j.execDur)
+	}
+	return j.err
+}
 
 func TestCronServer_StartStop(t *testing.T) {
 	job := &testCronJob{name: "test_job"}
@@ -118,5 +125,35 @@ func TestCronServer_MultipleJobs(t *testing.T) {
 	}
 	if got := job2.count.Load(); got < 2 {
 		t.Errorf("job_b: expected at least 2 executions, got %d", got)
+	}
+}
+
+func TestCronServer_SkipIfRunning(t *testing.T) {
+	// Job takes 5s to execute, but triggers every 1s.
+	// We wait 3.5s then stop. During that window the job is still running,
+	// so all subsequent triggers should be skipped.
+	slowJob := &testCronJob{name: "slow_job", execDur: 5 * time.Second}
+	tasks := []*conf.CronTask{
+		{Name: "slow_job", Schedule: "@every 1s", Enabled: true},
+	}
+
+	srv := NewCronServer(tasks, []CronJob{slowJob}, log.DefaultLogger)
+
+	ctx := context.Background()
+	done := make(chan error, 1)
+	go func() { done <- srv.Start(ctx) }()
+
+	// First trigger at ~1s, job runs for 5s (finishes at ~6s).
+	// Triggers at ~2s, ~3s are skipped. We stop at 3.5s, before job finishes.
+	time.Sleep(3500 * time.Millisecond)
+
+	if err := srv.Stop(ctx); err != nil {
+		t.Fatalf("Stop returned error: %v", err)
+	}
+	<-done
+
+	got := slowJob.count.Load()
+	if got != 1 {
+		t.Errorf("expected exactly 1 execution (skip while running), got %d", got)
 	}
 }
