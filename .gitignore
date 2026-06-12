@@ -44,6 +44,11 @@ CLAUDE.md
 AGENTS.md
 .claude/
 
+# Understand-Anything — commit graph artifacts, ignore local scratch
+# (https://github.com/Egonex-AI/Understand-Anything)
+.understand-anything/intermediate/
+.understand-anything/diff-overlay.json
+
 # deploy
 deploy/*/.env
 
