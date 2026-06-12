@@ -252,6 +252,30 @@ This template follows **Clean Architecture** principles:
 - Wire handles dependency injection at compile time
 - Configuration is type-safe via Protocol Buffers
 
+## Codebase Knowledge Graph
+
+This template ships preset configs for [Understand-Anything](https://github.com/Egonex-AI/Understand-Anything),
+a Claude Code plugin that builds a navigable knowledge graph of your codebase.
+The committed config (`.understand-anything/config.json` + `.understandignore`)
+scopes analysis to `internal/` (biz / data / service / server / job / conf) and
+excludes generated code, deploy manifests, and third-party files.
+
+```bash
+# Install (one-time per Claude Code workspace)
+/plugin marketplace add Egonex-AI/Understand-Anything
+/plugin install understand-anything
+
+# Build the graph (incremental on subsequent runs)
+/understand
+
+# Open the interactive dashboard
+/understand-dashboard
+```
+
+Generated artifacts (`knowledge-graph.json`, `fingerprints.json`, `meta.json`,
+`intermediate/`) are committed alongside the config so teammates can open the
+dashboard without re-running `/understand`.
+
 ## License
 
 MIT License

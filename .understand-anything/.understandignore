@@ -1,0 +1,47 @@
+# .understandignore — patterns for files/dirs to exclude from analysis
+# Syntax: same as .gitignore (globs, # comments, ! negation, trailing / for dirs)
+#
+# SCOPE: only internal/ core (biz / data / service / server / job / conf), with tests.
+# Everything outside internal/ is excluded to keep the knowledge graph focused
+# on business code, not boilerplate.
+
+# --- Top-level dirs outside internal/ ---
+api/
+cmd/
+configs/
+deploy/
+docs/
+pkg/
+scripts/
+test/
+third_party/
+
+# --- Root-level files ---
+# NOTE: go.mod is intentionally NOT excluded — the import-map resolver needs it
+# to resolve module-prefix imports.
+go.sum
+Makefile
+openapi.yaml
+docker-compose.yml
+*.yml
+*.yaml
+README.md
+
+# --- Generated / mock code inside internal/ ---
+*.pb.go
+*.pb.validate.go
+wire_gen.go
+internal/mocks/
+**/mocks/
+
+# --- Go build artifacts & local secrets ---
+bin/
+*.exe
+*.test
+*.out
+.DS_Store
+*.key
+*.cert
+tmp/
+.cursor/
+.codegraph/
