@@ -28,6 +28,9 @@ const (
 	DefaultNacosLogDir     = "/tmp/nacos/log"
 	DefaultNacosCacheDir   = "/tmp/nacos/cache"
 	DefaultNacosLogLevel   = "warn"
+
+	defaultNacosIP   = "127.0.0.1"
+	defaultNacosPort = 8848
 )
 
 // NacosConfig holds the configuration for Nacos client.
@@ -60,7 +63,7 @@ func NewNacosConfigFromEnv() *NacosConfig {
 // Format: "ip1:port1,ip2:port2" or "ip1,ip2" (default port 8848)
 func parseServerAddrs(addrs string) []ServerAddr {
 	if addrs == "" {
-		return []ServerAddr{{IP: "127.0.0.1", Port: 8848}}
+		return []ServerAddr{{IP: defaultNacosIP, Port: defaultNacosPort}}
 	}
 
 	parts := strings.Split(addrs, ",")
@@ -77,7 +80,7 @@ func parseServerAddrs(addrs string) []ServerAddr {
 	}
 
 	if len(result) == 0 {
-		return []ServerAddr{{IP: "127.0.0.1", Port: 8848}}
+		return []ServerAddr{{IP: defaultNacosIP, Port: defaultNacosPort}}
 	}
 
 	return result
@@ -93,7 +96,7 @@ func parseServerAddr(addr string) ServerAddr {
 		}
 	}
 	// Default port if not specified or invalid
-	return ServerAddr{IP: addr, Port: 8848}
+	return ServerAddr{IP: addr, Port: defaultNacosPort}
 }
 
 // NewNacosNamingClient creates a Nacos naming client from configuration.

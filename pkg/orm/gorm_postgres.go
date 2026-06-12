@@ -46,5 +46,5 @@ func (p *postgresDialect) quoteIdentifier(name string) string {
 }
 
 func (p *postgresDialect) utilDBName() string {
-	return "postgres"
+	return DriverPostgres
 }

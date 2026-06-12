@@ -27,6 +27,14 @@ var (
 	_ registry.Discovery = (*Registry)(nil)
 )
 
+const (
+	defaultCluster = "DEFAULT"
+	defaultKind    = "grpc"
+
+	metaKindKey    = "kind"
+	metaVersionKey = "version"
+)
+
 type options struct {
 	prefix  string
 	weight  float64
@@ -48,10 +56,10 @@ type Registry struct {
 func New(cli naming_client.INamingClient, opts ...Option) (r *Registry) {
 	op := options{
 		prefix:  "/microservices",
-		cluster: "DEFAULT",
+		cluster: defaultCluster,
 		group:   constant.DEFAULT_GROUP,
 		weight:  100,
-		kind:    "grpc",
+		kind:    defaultKind,
 	}
 	for _, option := range opts {
 		option(&op)
@@ -67,13 +75,13 @@ func (r *Registry) buildMetadata(si *registry.ServiceInstance, scheme string) (m
 	weight = r.opts.weight
 	if si.Metadata == nil {
 		return map[string]string{
-			"kind":    scheme,
-			"version": si.Version,
+			metaKindKey:    scheme,
+			metaVersionKey: si.Version,
 		}, weight
 	}
 	rmd := maps.Clone(si.Metadata)
-	rmd["kind"] = scheme
-	rmd["version"] = si.Version
+	rmd[metaKindKey] = scheme
+	rmd[metaVersionKey] = si.Version
 	if w, ok := si.Metadata["weight"]; ok {
 		if parsed, err := strconv.ParseFloat(w, 64); err == nil {
 			weight = parsed
@@ -170,7 +178,7 @@ func (r *Registry) GetService(_ context.Context, serviceName string) ([]*registr
 	for _, in := range res {
 		kind := r.opts.kind
 		weight := r.opts.weight
-		if k, ok := in.Metadata["kind"]; ok {
+		if k, ok := in.Metadata[metaKindKey]; ok {
 			kind = k
 		}
 		if in.Weight > 0 {
@@ -180,7 +188,7 @@ func (r *Registry) GetService(_ context.Context, serviceName string) ([]*registr
 		r := &registry.ServiceInstance{
 			ID:        in.InstanceId,
 			Name:      in.ServiceName,
-			Version:   in.Metadata["version"],
+			Version:   in.Metadata[metaVersionKey],
 			Metadata:  in.Metadata,
 			Endpoints: []string{kind + "://" + net.JoinHostPort(in.Ip, strconv.FormatUint(in.Port, 10))},
 		}

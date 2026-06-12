@@ -73,13 +73,13 @@ func (w *watcher) Next() ([]*registry.ServiceInstance, error) {
 	items := make([]*registry.ServiceInstance, 0, len(res.Hosts))
 	for _, in := range res.Hosts {
 		kind := w.kind
-		if k, ok := in.Metadata["kind"]; ok {
+		if k, ok := in.Metadata[metaKindKey]; ok {
 			kind = k
 		}
 		items = append(items, &registry.ServiceInstance{
 			ID:        in.InstanceId,
 			Name:      res.Name,
-			Version:   in.Metadata["version"],
+			Version:   in.Metadata[metaVersionKey],
 			Metadata:  in.Metadata,
 			Endpoints: []string{kind + "://" + net.JoinHostPort(in.Ip, strconv.FormatUint(in.Port, 10))},
 		})

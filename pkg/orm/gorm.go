@@ -40,10 +40,17 @@ type DBConfig struct {
 	MultiStatements bool
 }
 
+const (
+	DriverPostgres = "postgres"
+	DriverMySQL    = "mysql"
+
+	defaultCharset = "utf8mb4"
+)
+
 // getCharset returns the charset, defaulting to utf8mb4
 func (c *DBConfig) getCharset() string {
 	if c.DBCharset == "" {
-		return "utf8mb4"
+		return defaultCharset
 	}
 	return c.DBCharset
 }
@@ -75,11 +82,6 @@ type dialect interface {
 	quoteIdentifier(name string) string
 	utilDBName() string
 }
-
-const (
-	DriverPostgres = "postgres"
-	DriverMySQL    = "mysql"
-)
 
 func getDialect(driver string) (dialect, error) {
 	switch strings.ToLower(driver) {

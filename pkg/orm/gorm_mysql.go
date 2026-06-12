@@ -10,6 +10,8 @@ import (
 
 type mysqlDialect struct{}
 
+const mysqlUtilDB = "information_schema"
+
 func (m *mysqlDialect) buildDSN(config *DBConfig, dbName string) string {
 	dsn := fmt.Sprintf("%s:%s@tcp(%s:%s)/%s?charset=%s&parseTime=True&loc=Local",
 		config.Username,
@@ -51,5 +53,5 @@ func (m *mysqlDialect) quoteIdentifier(name string) string {
 }
 
 func (m *mysqlDialect) utilDBName() string {
-	return "information_schema"
+	return mysqlUtilDB
 }
