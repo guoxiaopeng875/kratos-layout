@@ -1,0 +1,132 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: prod
+
+namePrefix: prod-
+
+resources:
+  - ../../base
+  - pdb.yaml
+
+patches:
+  # -- ConfigMap: xxx-service prod overrides --
+  - target:
+      kind: ConfigMap
+      name: xxx-service-config
+    patch: |
+      apiVersion: v1
+      kind: ConfigMap
+      metadata:
+        name: xxx-service-config
+      data:
+        config.yaml: |
+          server:
+            http:
+              addr: 0.0.0.0:8000
+              timeout: 30s
+            grpc:
+              addr: 0.0.0.0:9000
+              timeout: 30s
+
+          data:
+            database:
+              driver: postgres
+              username: REPLACE_WITH_DB_USERNAME
+              password: ${DB_PASSWORD}
+              host: REPLACE_WITH_PROD_DB_HOST
+              port: 5432
+              db_name: app_prod
+              max_idle_conns: 10
+              max_open_conns: 100
+              db_charset: utf8mb4
+              conn_max_lifetime: 3600s
+              conn_max_idle_time: 3600s
+            redis:
+              addr: REPLACE_WITH_PROD_REDIS_ADDR
+              password: ${REDIS_PASSWORD}
+              db: 0
+              dial_timeout: 5s
+              read_timeout: 1s
+              write_timeout: 1s
+
+          kafka:
+            brokers:
+              - REPLACE_WITH_PROD_KAFKA_BROKER
+            group_id: "xxx-service"
+            write_timeout: 10s
+            read_timeout: 10s
+
+          cron_tasks:
+            - name: "helloworld"
+              schedule: "@every 30s"
+              enabled: true
+
+  # -- Deployment: xxx-service prod overrides --
+  - target:
+      kind: Deployment
+      name: xxx-service
+    patch: |
+      apiVersion: apps/v1
+      kind: Deployment
+      metadata:
+        name: xxx-service
+      spec:
+        replicas: 2
+        template:
+          spec:
+            containers:
+              - name: xxx-service
+                env:
+                  - name: LOG_LEVEL
+                    value: "info"
+                  - name: SERVICE_NAME
+                    value: "xxx-service"
+                  - name: NACOS_SERVER_ADDRS
+                    value: "REPLACE_WITH_NACOS_PROD_ADDR"
+                  - name: NACOS_NAMESPACE_ID
+                    value: "prod"
+                resources:
+                  requests:
+                    cpu: 200m
+                    memory: 256Mi
+                  limits:
+                    cpu: "2"
+                    memory: 1Gi
+            topologySpreadConstraints:
+              - maxSkew: 1
+                topologyKey: kubernetes.io/hostname
+                whenUnsatisfiable: DoNotSchedule
+                labelSelector:
+                  matchLabels:
+                    app.kubernetes.io/name: xxx-service
+
+  # -- Deployment: xxx-job prod overrides --
+  - target:
+      kind: Deployment
+      name: xxx-job
+    patch: |
+      apiVersion: apps/v1
+      kind: Deployment
+      metadata:
+        name: xxx-job
+      spec:
+        replicas: 1
+        template:
+          spec:
+            containers:
+              - name: xxx-job
+                env:
+                  - name: LOG_LEVEL
+                    value: "info"
+                resources:
+                  requests:
+                    cpu: 100m
+                    memory: 128Mi
+                  limits:
+                    cpu: "1"
+                    memory: 512Mi
+
+images:
+  - name: REPLACE_WITH_REGISTRY/xxx-service
+    newTag: REPLACE_WITH_VERSION

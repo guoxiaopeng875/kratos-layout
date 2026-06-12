@@ -1,0 +1,184 @@
+# GitLab CI/CD pipeline for kratos-layout template.
+#
+# Stages:
+#   - check:   lint + unit tests (MR only)
+#   - build:   docker image build (dev branch & release tags)
+#   - deploy:  kubectl apply via kustomize overlays
+#
+# Required CI/CD variables (project or group level):
+#   DOCKER_REGISTRY   - container registry host (e.g. registry.example.com)
+#   DOCKER_NS         - registry namespace / project (e.g. myteam)
+#   DOCKER_USERNAME   - registry login user
+#   DOCKER_PASSWORD   - base64-encoded registry password
+#   GIT_TOKEN         - oauth2 token for private go modules (optional)
+#
+# Runner tags (`tags:` blocks) default to placeholders — replace with the
+# tags configured for your runners (docker, kubernetes, shell, etc.).
+
+default:
+  image: golang:1.26.1-bookworm
+
+workflow:
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    - if: $CI_COMMIT_BRANCH == "dev"
+    - if: $CI_COMMIT_TAG =~ /-release$/
+
+stages:
+  - check
+  - build
+  - deploy
+
+variables:
+  GOFLAGS: "-mod=readonly"
+  GOLANGCI_LINT_CACHE: "${CI_PROJECT_DIR}/.cache/golangci-lint"
+  GOPATH: "${CI_PROJECT_DIR}/.go"
+  GOCACHE: "${CI_PROJECT_DIR}/.cache/go-build"
+
+lint:
+  stage: check
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+  tags:
+    - REPLACE_WITH_RUNNER_TAG
+  cache:
+    key:
+      files:
+        - go.sum
+    paths:
+      - .cache/go-build/
+      - .cache/golangci-lint/
+      - .go/pkg/mod/
+      - .go/bin/
+      - .ci-passed/
+  before_script:
+    - |
+      if [ -f .ci-passed/lint-${CI_COMMIT_SHA} ]; then
+        echo "Lint already passed for commit ${CI_COMMIT_SHA}, skipping"
+        exit 0
+      fi
+    - export PATH="${GOPATH}/bin:${PATH}"
+    - go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@latest
+    - go mod download
+  script:
+    - |
+      if [ -f .ci-passed/lint-${CI_COMMIT_SHA} ]; then
+        exit 0
+      fi
+    - golangci-lint run ./...
+    - mkdir -p .ci-passed && touch .ci-passed/lint-${CI_COMMIT_SHA}
+
+test:
+  stage: check
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+  tags:
+    - REPLACE_WITH_RUNNER_TAG
+  cache:
+    key:
+      files:
+        - go.sum
+    paths:
+      - .cache/go-build/
+      - .go/pkg/mod/
+      - .ci-passed/
+  services:
+    - name: redis:7-alpine
+      alias: redis
+    - name: postgres:17-alpine
+      alias: postgres
+  variables:
+    POSTGRES_USER: postgres
+    POSTGRES_PASSWORD: postgres
+    POSTGRES_DB: app_test
+  before_script:
+    - |
+      if [ -f .ci-passed/test-${CI_COMMIT_SHA} ]; then
+        echo "Test already passed for commit ${CI_COMMIT_SHA}, skipping"
+        exit 0
+      fi
+    - go mod download
+  script:
+    - |
+      if [ -f .ci-passed/test-${CI_COMMIT_SHA} ]; then
+        exit 0
+      fi
+    - ./scripts/coverage.sh ./pkg/... ./internal/biz/... ./internal/data/... ./internal/service/...
+    - mkdir -p .ci-passed && touch .ci-passed/test-${CI_COMMIT_SHA}
+  coverage: '/Total coverage: \d+.\d+%/'
+
+docker-build-latest:
+  stage: build
+  rules:
+    - if: $CI_COMMIT_BRANCH == "dev"
+  tags:
+    - REPLACE_WITH_DOCKER_RUNNER_TAG
+  before_script:
+    - PASSWORD=$(echo "$DOCKER_PASSWORD" | base64 -d)
+    - docker login -u "$DOCKER_USERNAME" -p "$PASSWORD" "$DOCKER_REGISTRY"
+  script:
+    - >
+      docker build
+      --secret id=GIT_TOKEN,env=GIT_TOKEN
+      -t "$DOCKER_REGISTRY/$DOCKER_NS/xxx-service:latest"
+      -f deploy/Dockerfile .
+    - docker push "$DOCKER_REGISTRY/$DOCKER_NS/xxx-service:latest"
+
+deploy-dev:
+  stage: deploy
+  rules:
+    - if: $CI_COMMIT_BRANCH == "dev"
+  tags:
+    - REPLACE_WITH_DEPLOY_RUNNER_TAG
+  needs:
+    - docker-build-latest
+  script:
+    - export KUBECONFIG="$HOME/.kube/config"
+    - kubectl apply -k deploy/k8s/overlays/dev/
+    - kubectl rollout restart deployment/xxx-service -n test
+    - kubectl rollout restart deployment/xxx-job -n test
+    - kubectl rollout status deployment/xxx-service -n test --timeout=120s
+    - kubectl rollout status deployment/xxx-job -n test --timeout=120s
+
+docker-build-prod:
+  stage: build
+  rules:
+    - if: $CI_COMMIT_TAG =~ /-release$/
+  tags:
+    - REPLACE_WITH_DOCKER_RUNNER_TAG
+  before_script:
+    - git fetch origin main
+    - |
+      MAIN_HEAD=$(git rev-parse origin/main)
+      if [ "$CI_COMMIT_SHA" != "$MAIN_HEAD" ]; then
+        echo "ERROR: Tag $CI_COMMIT_TAG ($CI_COMMIT_SHA) is not on the latest main commit ($MAIN_HEAD)"
+        exit 1
+      fi
+    - PASSWORD=$(echo "$DOCKER_PASSWORD" | base64 -d)
+    - docker login -u "$DOCKER_USERNAME" -p "$PASSWORD" "$DOCKER_REGISTRY"
+  script:
+    - >
+      docker build
+      --secret id=GIT_TOKEN,env=GIT_TOKEN
+      -t "$DOCKER_REGISTRY/$DOCKER_NS/xxx-service:${CI_COMMIT_TAG}"
+      -f deploy/Dockerfile .
+    - docker push "$DOCKER_REGISTRY/$DOCKER_NS/xxx-service:${CI_COMMIT_TAG}"
+
+deploy-prod:
+  stage: deploy
+  rules:
+    - if: $CI_COMMIT_TAG =~ /-release$/
+      when: manual
+  allow_failure: false
+  tags:
+    - REPLACE_WITH_DEPLOY_RUNNER_TAG
+  needs:
+    - docker-build-prod
+  script:
+    - cd deploy/k8s/overlays/prod
+    - kustomize edit set image $DOCKER_REGISTRY/$DOCKER_NS/xxx-service:${CI_COMMIT_TAG}
+    - kubectl apply -k .
+    - kubectl rollout restart deployment/prod-xxx-service -n prod
+    - kubectl rollout restart deployment/prod-xxx-job -n prod
+    - kubectl rollout status deployment/prod-xxx-service -n prod --timeout=120s
+    - kubectl rollout status deployment/prod-xxx-job -n prod --timeout=120s

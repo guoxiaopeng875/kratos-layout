@@ -7,17 +7,22 @@ import (
 
 	"github.com/go-kratos/kratos/v2/log"
 	"github.com/google/wire"
+	"github.com/redis/go-redis/extra/redisotel/v9"
 	"github.com/redis/go-redis/v9"
 	"gorm.io/gorm"
+	gormtracing "gorm.io/plugin/opentelemetry/tracing"
 
 	"github.com/go-kratos/kratos-layout/internal/biz"
 	"github.com/go-kratos/kratos-layout/internal/conf"
+	"github.com/go-kratos/kratos-layout/pkg/metrics"
 	"github.com/go-kratos/kratos-layout/pkg/orm"
 )
 
 // ProviderSet is data providers.
 var ProviderSet = wire.NewSet(
-	NewData, NewTransaction,
+	NewRedisClient,
+	NewData,
+	NewTransaction,
 	NewGreeterRepo,
 )
 
@@ -48,7 +53,7 @@ func (d *Data) InTx(ctx context.Context, fn func(ctx context.Context) error) err
 	})
 }
 
-// NewTransaction returns a shard.Transaction backed by Data.
+// NewTransaction returns a biz.Transaction backed by Data.
 func NewTransaction(d *Data) biz.Transaction {
 	return d
 }
@@ -58,8 +63,48 @@ func (d *Data) Redis() *redis.Client {
 	return d.rdb
 }
 
-// NewData creates a new Data instance and returns a cleanup function.
-func NewData(c *conf.Data, logger log.Logger) (*Data, func(), error) {
+// NewRedisClient creates a Redis client from config and returns a cleanup
+// function. The client has OpenTelemetry tracing and the Prometheus metrics
+// hook installed.
+func NewRedisClient(c *conf.Data, logger log.Logger) (*redis.Client, func(), error) {
+	logHelper := log.NewHelper(logger)
+
+	rdb := redis.NewClient(&redis.Options{
+		Addr:         c.Redis.Addr,
+		Password:     c.Redis.Password,
+		DB:           int(c.Redis.Db),
+		DialTimeout:  c.Redis.DialTimeout.AsDuration(),
+		WriteTimeout: c.Redis.WriteTimeout.AsDuration(),
+		ReadTimeout:  c.Redis.ReadTimeout.AsDuration(),
+	})
+
+	pingTimeoutCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	if _, err := rdb.Ping(pingTimeoutCtx).Result(); err != nil {
+		logHelper.Errorf("failed to ping redis: %v", err)
+		return nil, nil, err
+	}
+
+	if err := redisotel.InstrumentTracing(rdb); err != nil {
+		logHelper.Errorf("failed to install redis tracing: %v", err)
+		return nil, nil, err
+	}
+
+	rdb.AddHook(metrics.NewRedisHook())
+
+	cleanup := func() {
+		if err := rdb.Close(); err != nil {
+			logHelper.Errorf("failed to close redis: %v", err)
+		}
+	}
+
+	return rdb, cleanup, nil
+}
+
+// NewData creates a new Data instance and returns a cleanup function. The
+// underlying *gorm.DB has the OpenTelemetry tracing plugin installed and its
+// connection pool is registered as a Prometheus collector.
+func NewData(c *conf.Data, rdb *redis.Client, logger log.Logger) (*Data, func(), error) {
 	logHelper := log.NewHelper(logger)
 
 	dbConf := &orm.DBConfig{
@@ -81,37 +126,35 @@ func NewData(c *conf.Data, logger log.Logger) (*Data, func(), error) {
 		return nil, nil, err
 	}
 
-	rdb := redis.NewClient(&redis.Options{
-		Addr:         c.Redis.Addr,
-		Password:     c.Redis.Password,
-		DB:           int(c.Redis.Db),
-		DialTimeout:  c.Redis.DialTimeout.AsDuration(),
-		WriteTimeout: c.Redis.WriteTimeout.AsDuration(),
-		ReadTimeout:  c.Redis.ReadTimeout.AsDuration(),
-	})
-
-	// add redis ping check
-	pingTimeoutCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-	if _, err := rdb.Ping(pingTimeoutCtx).Result(); err != nil {
-		logHelper.Errorf("failed to ping redis: %v", err)
-		return nil, nil, err
+	if pluginErr := ormDB.GetDB().Use(gormtracing.NewPlugin(
+		gormtracing.WithoutMetrics(),
+		gormtracing.WithoutQueryVariables(),
+	)); pluginErr != nil {
+		return nil, nil, fmt.Errorf("install gorm tracing plugin: %w", pluginErr)
 	}
 
 	cleanup := func() {
 		logHelper.Info("closing the data resources")
-
-		if err := rdb.Close(); err != nil {
-			logHelper.Errorf("failed to close redis data resources: %v", err)
-		}
-
 		if err := ormDB.Close(); err != nil {
 			logHelper.Errorf("failed to close database data resources: %v", err)
 		}
 	}
 
-	return &Data{
+	d := &Data{
 		db:  ormDB.GetDB(),
 		rdb: rdb,
-	}, cleanup, nil
+	}
+
+	registerDBCollector(d.db)
+
+	return d, cleanup, nil
+}
+
+// registerDBCollector registers a Prometheus collector for the DB connection pool.
+func registerDBCollector(db *gorm.DB) {
+	sqlDB, err := db.DB()
+	if err != nil {
+		return
+	}
+	metrics.RegisterCollector(metrics.NewDBCollector(sqlDB))
 }

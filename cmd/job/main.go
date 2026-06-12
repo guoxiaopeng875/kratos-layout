@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"flag"
 	"fmt"
 	"os"
@@ -11,6 +12,8 @@ import (
 	"github.com/go-kratos/kratos/v2/config/file"
 	"github.com/go-kratos/kratos/v2/encoding/json"
 	"github.com/go-kratos/kratos/v2/log"
+	kratostracing "github.com/go-kratos/kratos/v2/middleware/tracing"
+	"github.com/go-kratos/kratos/v2/transport/http"
 	_ "go.uber.org/automaxprocs"
 	"go.uber.org/zap/zapcore"
 	"google.golang.org/protobuf/encoding/protojson"
@@ -19,6 +22,8 @@ import (
 	"github.com/go-kratos/kratos-layout/internal/job"
 	"github.com/go-kratos/kratos-layout/pkg/env"
 	zapLog "github.com/go-kratos/kratos-layout/pkg/log"
+	"github.com/go-kratos/kratos-layout/pkg/metrics"
+	"github.com/go-kratos/kratos-layout/pkg/tracing"
 )
 
 var (
@@ -49,14 +54,14 @@ func init() {
 	}
 }
 
-func newApp(logger log.Logger, cronServer *job.CronServer) *kratos.App {
+func newApp(logger log.Logger, cronServer *job.CronServer, hs *http.Server) *kratos.App {
 	return kratos.New(
 		kratos.ID(id),
 		kratos.Name(Name),
 		kratos.Version(Version),
 		kratos.Metadata(map[string]string{}),
 		kratos.Logger(logger),
-		kratos.Server(cronServer),
+		kratos.Server(cronServer, hs),
 	)
 }
 
@@ -70,8 +75,8 @@ func main() {
 }
 
 func run() error {
-	logger := zapLog.InitDefaultLogger(parseLogLevel())
-	logHelper := log.NewHelper(logger)
+	baseLogger := zapLog.InitDefaultLogger(parseLogLevel())
+	logHelper := log.NewHelper(baseLogger)
 
 	bc, cleanup, err := loadConfig()
 	if err != nil {
@@ -80,7 +85,29 @@ func run() error {
 	}
 	defer cleanup()
 
-	app, appCleanup, err := wireApp(bc.CronTasks, logger)
+	tracingCleanup, err := tracing.Setup(context.Background(), bc.GetTracing(), Name, baseLogger)
+	if err != nil {
+		logHelper.Errorf("failed to setup tracing: %v", err)
+		return err
+	}
+	defer tracingCleanup(context.Background())
+
+	// Install the dedicated Prometheus registry. /metrics is served by the
+	// http.Server built in internal/server/http_job.go; without Setup that
+	// endpoint returns 503 and the app_* instruments don't reach Prometheus.
+	metricsCleanup, err := metrics.Setup(context.Background(), Name, baseLogger)
+	if err != nil {
+		logHelper.Errorf("failed to setup metrics: %v", err)
+		return err
+	}
+	defer metricsCleanup()
+
+	logger := log.With(baseLogger,
+		"trace_id", kratostracing.TraceID(),
+		"span_id", kratostracing.SpanID(),
+	)
+
+	app, appCleanup, err := wireApp(bc.Server, bc.CronTasks, logger)
 	if err != nil {
 		logHelper.Errorf("failed to wire app: %v", err)
 		return err

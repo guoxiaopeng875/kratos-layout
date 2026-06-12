@@ -29,6 +29,7 @@ type Bootstrap struct {
 	Data          *Data                  `protobuf:"bytes,2,opt,name=data,proto3" json:"data,omitempty"`
 	Kafka         *Kafka                 `protobuf:"bytes,3,opt,name=kafka,proto3" json:"kafka,omitempty"`
 	CronTasks     []*CronTask            `protobuf:"bytes,4,rep,name=cron_tasks,json=cronTasks,proto3" json:"cron_tasks,omitempty"`
+	Tracing       *Tracing               `protobuf:"bytes,5,opt,name=tracing,proto3" json:"tracing,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -91,6 +92,140 @@ func (x *Bootstrap) GetCronTasks() []*CronTask {
 	return nil
 }
 
+func (x *Bootstrap) GetTracing() *Tracing {
+	if x != nil {
+		return x.Tracing
+	}
+	return nil
+}
+
+// Tracing holds OpenTelemetry tracing configuration. When the message is nil
+// or no endpoint is configured, tracing setup is skipped (no exporter, no
+// global provider).
+type Tracing struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// OTLP/HTTP collector endpoint. Set exactly one of the two fields:
+	//
+	//	http_endpoint:     "host:port" form (path defaults to /v1/traces, scheme decided by insecure)
+	//	http_endpoint_url: full URL form (e.g. "http://collector:4318/v1/traces")
+	//
+	// Types that are valid to be assigned to Endpoint:
+	//
+	//	*Tracing_HttpEndpoint
+	//	*Tracing_HttpEndpointUrl
+	Endpoint isTracing_Endpoint `protobuf_oneof:"endpoint"`
+	// Sampling ratio in [0, 1]. Unset → AlwaysSample.
+	SampleRatio *float32 `protobuf:"fixed32,3,opt,name=sample_ratio,json=sampleRatio,proto3,oneof" json:"sample_ratio,omitempty"`
+	// Exporter timeout. Default: 10s.
+	Timeout *durationpb.Duration `protobuf:"bytes,4,opt,name=timeout,proto3" json:"timeout,omitempty"`
+	// Use insecure (HTTP, not HTTPS) when http_endpoint is set.
+	Insecure *bool `protobuf:"varint,5,opt,name=insecure,proto3,oneof" json:"insecure,omitempty"`
+	// Override the service.name resource attribute for tracing. Empty → fall
+	// back to the process-level SERVICE_NAME.
+	ServiceName   string `protobuf:"bytes,6,opt,name=service_name,json=serviceName,proto3" json:"service_name,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *Tracing) Reset() {
+	*x = Tracing{}
+	mi := &file_conf_conf_proto_msgTypes[1]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *Tracing) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*Tracing) ProtoMessage() {}
+
+func (x *Tracing) ProtoReflect() protoreflect.Message {
+	mi := &file_conf_conf_proto_msgTypes[1]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use Tracing.ProtoReflect.Descriptor instead.
+func (*Tracing) Descriptor() ([]byte, []int) {
+	return file_conf_conf_proto_rawDescGZIP(), []int{1}
+}
+
+func (x *Tracing) GetEndpoint() isTracing_Endpoint {
+	if x != nil {
+		return x.Endpoint
+	}
+	return nil
+}
+
+func (x *Tracing) GetHttpEndpoint() string {
+	if x != nil {
+		if x, ok := x.Endpoint.(*Tracing_HttpEndpoint); ok {
+			return x.HttpEndpoint
+		}
+	}
+	return ""
+}
+
+func (x *Tracing) GetHttpEndpointUrl() string {
+	if x != nil {
+		if x, ok := x.Endpoint.(*Tracing_HttpEndpointUrl); ok {
+			return x.HttpEndpointUrl
+		}
+	}
+	return ""
+}
+
+func (x *Tracing) GetSampleRatio() float32 {
+	if x != nil && x.SampleRatio != nil {
+		return *x.SampleRatio
+	}
+	return 0
+}
+
+func (x *Tracing) GetTimeout() *durationpb.Duration {
+	if x != nil {
+		return x.Timeout
+	}
+	return nil
+}
+
+func (x *Tracing) GetInsecure() bool {
+	if x != nil && x.Insecure != nil {
+		return *x.Insecure
+	}
+	return false
+}
+
+func (x *Tracing) GetServiceName() string {
+	if x != nil {
+		return x.ServiceName
+	}
+	return ""
+}
+
+type isTracing_Endpoint interface {
+	isTracing_Endpoint()
+}
+
+type Tracing_HttpEndpoint struct {
+	HttpEndpoint string `protobuf:"bytes,1,opt,name=http_endpoint,json=httpEndpoint,proto3,oneof"`
+}
+
+type Tracing_HttpEndpointUrl struct {
+	HttpEndpointUrl string `protobuf:"bytes,2,opt,name=http_endpoint_url,json=httpEndpointUrl,proto3,oneof"`
+}
+
+func (*Tracing_HttpEndpoint) isTracing_Endpoint() {}
+
+func (*Tracing_HttpEndpointUrl) isTracing_Endpoint() {}
+
 // CronTask 定时任务配置
 type CronTask struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
@@ -103,7 +238,7 @@ type CronTask struct {
 
 func (x *CronTask) Reset() {
 	*x = CronTask{}
-	mi := &file_conf_conf_proto_msgTypes[1]
+	mi := &file_conf_conf_proto_msgTypes[2]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -115,7 +250,7 @@ func (x *CronTask) String() string {
 func (*CronTask) ProtoMessage() {}
 
 func (x *CronTask) ProtoReflect() protoreflect.Message {
-	mi := &file_conf_conf_proto_msgTypes[1]
+	mi := &file_conf_conf_proto_msgTypes[2]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -128,7 +263,7 @@ func (x *CronTask) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CronTask.ProtoReflect.Descriptor instead.
 func (*CronTask) Descriptor() ([]byte, []int) {
-	return file_conf_conf_proto_rawDescGZIP(), []int{1}
+	return file_conf_conf_proto_rawDescGZIP(), []int{2}
 }
 
 func (x *CronTask) GetName() string {
@@ -165,7 +300,7 @@ type Kafka struct {
 
 func (x *Kafka) Reset() {
 	*x = Kafka{}
-	mi := &file_conf_conf_proto_msgTypes[2]
+	mi := &file_conf_conf_proto_msgTypes[3]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -177,7 +312,7 @@ func (x *Kafka) String() string {
 func (*Kafka) ProtoMessage() {}
 
 func (x *Kafka) ProtoReflect() protoreflect.Message {
-	mi := &file_conf_conf_proto_msgTypes[2]
+	mi := &file_conf_conf_proto_msgTypes[3]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -190,7 +325,7 @@ func (x *Kafka) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Kafka.ProtoReflect.Descriptor instead.
 func (*Kafka) Descriptor() ([]byte, []int) {
-	return file_conf_conf_proto_rawDescGZIP(), []int{2}
+	return file_conf_conf_proto_rawDescGZIP(), []int{3}
 }
 
 func (x *Kafka) GetBrokers() string {
@@ -231,7 +366,7 @@ type Server struct {
 
 func (x *Server) Reset() {
 	*x = Server{}
-	mi := &file_conf_conf_proto_msgTypes[3]
+	mi := &file_conf_conf_proto_msgTypes[4]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -243,7 +378,7 @@ func (x *Server) String() string {
 func (*Server) ProtoMessage() {}
 
 func (x *Server) ProtoReflect() protoreflect.Message {
-	mi := &file_conf_conf_proto_msgTypes[3]
+	mi := &file_conf_conf_proto_msgTypes[4]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -256,7 +391,7 @@ func (x *Server) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Server.ProtoReflect.Descriptor instead.
 func (*Server) Descriptor() ([]byte, []int) {
-	return file_conf_conf_proto_rawDescGZIP(), []int{3}
+	return file_conf_conf_proto_rawDescGZIP(), []int{4}
 }
 
 func (x *Server) GetHttp() *Server_HTTP {
@@ -283,7 +418,7 @@ type Data struct {
 
 func (x *Data) Reset() {
 	*x = Data{}
-	mi := &file_conf_conf_proto_msgTypes[4]
+	mi := &file_conf_conf_proto_msgTypes[5]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -295,7 +430,7 @@ func (x *Data) String() string {
 func (*Data) ProtoMessage() {}
 
 func (x *Data) ProtoReflect() protoreflect.Message {
-	mi := &file_conf_conf_proto_msgTypes[4]
+	mi := &file_conf_conf_proto_msgTypes[5]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -308,7 +443,7 @@ func (x *Data) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Data.ProtoReflect.Descriptor instead.
 func (*Data) Descriptor() ([]byte, []int) {
-	return file_conf_conf_proto_rawDescGZIP(), []int{4}
+	return file_conf_conf_proto_rawDescGZIP(), []int{5}
 }
 
 func (x *Data) GetDatabase() *Data_Database {
@@ -336,7 +471,7 @@ type Server_HTTP struct {
 
 func (x *Server_HTTP) Reset() {
 	*x = Server_HTTP{}
-	mi := &file_conf_conf_proto_msgTypes[5]
+	mi := &file_conf_conf_proto_msgTypes[6]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -348,7 +483,7 @@ func (x *Server_HTTP) String() string {
 func (*Server_HTTP) ProtoMessage() {}
 
 func (x *Server_HTTP) ProtoReflect() protoreflect.Message {
-	mi := &file_conf_conf_proto_msgTypes[5]
+	mi := &file_conf_conf_proto_msgTypes[6]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -361,7 +496,7 @@ func (x *Server_HTTP) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Server_HTTP.ProtoReflect.Descriptor instead.
 func (*Server_HTTP) Descriptor() ([]byte, []int) {
-	return file_conf_conf_proto_rawDescGZIP(), []int{3, 0}
+	return file_conf_conf_proto_rawDescGZIP(), []int{4, 0}
 }
 
 func (x *Server_HTTP) GetNetwork() string {
@@ -396,7 +531,7 @@ type Server_GRPC struct {
 
 func (x *Server_GRPC) Reset() {
 	*x = Server_GRPC{}
-	mi := &file_conf_conf_proto_msgTypes[6]
+	mi := &file_conf_conf_proto_msgTypes[7]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -408,7 +543,7 @@ func (x *Server_GRPC) String() string {
 func (*Server_GRPC) ProtoMessage() {}
 
 func (x *Server_GRPC) ProtoReflect() protoreflect.Message {
-	mi := &file_conf_conf_proto_msgTypes[6]
+	mi := &file_conf_conf_proto_msgTypes[7]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -421,7 +556,7 @@ func (x *Server_GRPC) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Server_GRPC.ProtoReflect.Descriptor instead.
 func (*Server_GRPC) Descriptor() ([]byte, []int) {
-	return file_conf_conf_proto_rawDescGZIP(), []int{3, 1}
+	return file_conf_conf_proto_rawDescGZIP(), []int{4, 1}
 }
 
 func (x *Server_GRPC) GetNetwork() string {
@@ -464,7 +599,7 @@ type Data_Database struct {
 
 func (x *Data_Database) Reset() {
 	*x = Data_Database{}
-	mi := &file_conf_conf_proto_msgTypes[7]
+	mi := &file_conf_conf_proto_msgTypes[8]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -476,7 +611,7 @@ func (x *Data_Database) String() string {
 func (*Data_Database) ProtoMessage() {}
 
 func (x *Data_Database) ProtoReflect() protoreflect.Message {
-	mi := &file_conf_conf_proto_msgTypes[7]
+	mi := &file_conf_conf_proto_msgTypes[8]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -489,7 +624,7 @@ func (x *Data_Database) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Data_Database.ProtoReflect.Descriptor instead.
 func (*Data_Database) Descriptor() ([]byte, []int) {
-	return file_conf_conf_proto_rawDescGZIP(), []int{4, 0}
+	return file_conf_conf_proto_rawDescGZIP(), []int{5, 0}
 }
 
 func (x *Data_Database) GetUsername() string {
@@ -584,7 +719,7 @@ type Data_Redis struct {
 
 func (x *Data_Redis) Reset() {
 	*x = Data_Redis{}
-	mi := &file_conf_conf_proto_msgTypes[8]
+	mi := &file_conf_conf_proto_msgTypes[9]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -596,7 +731,7 @@ func (x *Data_Redis) String() string {
 func (*Data_Redis) ProtoMessage() {}
 
 func (x *Data_Redis) ProtoReflect() protoreflect.Message {
-	mi := &file_conf_conf_proto_msgTypes[8]
+	mi := &file_conf_conf_proto_msgTypes[9]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -609,7 +744,7 @@ func (x *Data_Redis) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Data_Redis.ProtoReflect.Descriptor instead.
 func (*Data_Redis) Descriptor() ([]byte, []int) {
-	return file_conf_conf_proto_rawDescGZIP(), []int{4, 1}
+	return file_conf_conf_proto_rawDescGZIP(), []int{5, 1}
 }
 
 func (x *Data_Redis) GetNetwork() string {
@@ -666,13 +801,25 @@ var File_conf_conf_proto protoreflect.FileDescriptor
 const file_conf_conf_proto_rawDesc = "" +
 	"\n" +
 	"\x0fconf/conf.proto\x12\n" +
-	"kratos.api\x1a\x1egoogle/protobuf/duration.proto\"\xbb\x01\n" +
+	"kratos.api\x1a\x1egoogle/protobuf/duration.proto\"\xea\x01\n" +
 	"\tBootstrap\x12*\n" +
 	"\x06server\x18\x01 \x01(\v2\x12.kratos.api.ServerR\x06server\x12$\n" +
 	"\x04data\x18\x02 \x01(\v2\x10.kratos.api.DataR\x04data\x12'\n" +
 	"\x05kafka\x18\x03 \x01(\v2\x11.kratos.api.KafkaR\x05kafka\x123\n" +
 	"\n" +
-	"cron_tasks\x18\x04 \x03(\v2\x14.kratos.api.CronTaskR\tcronTasks\"T\n" +
+	"cron_tasks\x18\x04 \x03(\v2\x14.kratos.api.CronTaskR\tcronTasks\x12-\n" +
+	"\atracing\x18\x05 \x01(\v2\x13.kratos.api.TracingR\atracing\"\xa9\x02\n" +
+	"\aTracing\x12%\n" +
+	"\rhttp_endpoint\x18\x01 \x01(\tH\x00R\fhttpEndpoint\x12,\n" +
+	"\x11http_endpoint_url\x18\x02 \x01(\tH\x00R\x0fhttpEndpointUrl\x12&\n" +
+	"\fsample_ratio\x18\x03 \x01(\x02H\x01R\vsampleRatio\x88\x01\x01\x123\n" +
+	"\atimeout\x18\x04 \x01(\v2\x19.google.protobuf.DurationR\atimeout\x12\x1f\n" +
+	"\binsecure\x18\x05 \x01(\bH\x02R\binsecure\x88\x01\x01\x12!\n" +
+	"\fservice_name\x18\x06 \x01(\tR\vserviceNameB\n" +
+	"\n" +
+	"\bendpointB\x0f\n" +
+	"\r_sample_ratioB\v\n" +
+	"\t_insecure\"T\n" +
 	"\bCronTask\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12\x1a\n" +
 	"\bschedule\x18\x02 \x01(\tR\bschedule\x12\x18\n" +
@@ -731,42 +878,45 @@ func file_conf_conf_proto_rawDescGZIP() []byte {
 	return file_conf_conf_proto_rawDescData
 }
 
-var file_conf_conf_proto_msgTypes = make([]protoimpl.MessageInfo, 9)
+var file_conf_conf_proto_msgTypes = make([]protoimpl.MessageInfo, 10)
 var file_conf_conf_proto_goTypes = []any{
 	(*Bootstrap)(nil),           // 0: kratos.api.Bootstrap
-	(*CronTask)(nil),            // 1: kratos.api.CronTask
-	(*Kafka)(nil),               // 2: kratos.api.Kafka
-	(*Server)(nil),              // 3: kratos.api.Server
-	(*Data)(nil),                // 4: kratos.api.Data
-	(*Server_HTTP)(nil),         // 5: kratos.api.Server.HTTP
-	(*Server_GRPC)(nil),         // 6: kratos.api.Server.GRPC
-	(*Data_Database)(nil),       // 7: kratos.api.Data.Database
-	(*Data_Redis)(nil),          // 8: kratos.api.Data.Redis
-	(*durationpb.Duration)(nil), // 9: google.protobuf.Duration
+	(*Tracing)(nil),             // 1: kratos.api.Tracing
+	(*CronTask)(nil),            // 2: kratos.api.CronTask
+	(*Kafka)(nil),               // 3: kratos.api.Kafka
+	(*Server)(nil),              // 4: kratos.api.Server
+	(*Data)(nil),                // 5: kratos.api.Data
+	(*Server_HTTP)(nil),         // 6: kratos.api.Server.HTTP
+	(*Server_GRPC)(nil),         // 7: kratos.api.Server.GRPC
+	(*Data_Database)(nil),       // 8: kratos.api.Data.Database
+	(*Data_Redis)(nil),          // 9: kratos.api.Data.Redis
+	(*durationpb.Duration)(nil), // 10: google.protobuf.Duration
 }
 var file_conf_conf_proto_depIdxs = []int32{
-	3,  // 0: kratos.api.Bootstrap.server:type_name -> kratos.api.Server
-	4,  // 1: kratos.api.Bootstrap.data:type_name -> kratos.api.Data
-	2,  // 2: kratos.api.Bootstrap.kafka:type_name -> kratos.api.Kafka
-	1,  // 3: kratos.api.Bootstrap.cron_tasks:type_name -> kratos.api.CronTask
-	9,  // 4: kratos.api.Kafka.write_timeout:type_name -> google.protobuf.Duration
-	9,  // 5: kratos.api.Kafka.read_timeout:type_name -> google.protobuf.Duration
-	5,  // 6: kratos.api.Server.http:type_name -> kratos.api.Server.HTTP
-	6,  // 7: kratos.api.Server.grpc:type_name -> kratos.api.Server.GRPC
-	7,  // 8: kratos.api.Data.database:type_name -> kratos.api.Data.Database
-	8,  // 9: kratos.api.Data.redis:type_name -> kratos.api.Data.Redis
-	9,  // 10: kratos.api.Server.HTTP.timeout:type_name -> google.protobuf.Duration
-	9,  // 11: kratos.api.Server.GRPC.timeout:type_name -> google.protobuf.Duration
-	9,  // 12: kratos.api.Data.Database.conn_max_lifetime:type_name -> google.protobuf.Duration
-	9,  // 13: kratos.api.Data.Database.conn_max_idle_time:type_name -> google.protobuf.Duration
-	9,  // 14: kratos.api.Data.Redis.dial_timeout:type_name -> google.protobuf.Duration
-	9,  // 15: kratos.api.Data.Redis.read_timeout:type_name -> google.protobuf.Duration
-	9,  // 16: kratos.api.Data.Redis.write_timeout:type_name -> google.protobuf.Duration
-	17, // [17:17] is the sub-list for method output_type
-	17, // [17:17] is the sub-list for method input_type
-	17, // [17:17] is the sub-list for extension type_name
-	17, // [17:17] is the sub-list for extension extendee
-	0,  // [0:17] is the sub-list for field type_name
+	4,  // 0: kratos.api.Bootstrap.server:type_name -> kratos.api.Server
+	5,  // 1: kratos.api.Bootstrap.data:type_name -> kratos.api.Data
+	3,  // 2: kratos.api.Bootstrap.kafka:type_name -> kratos.api.Kafka
+	2,  // 3: kratos.api.Bootstrap.cron_tasks:type_name -> kratos.api.CronTask
+	1,  // 4: kratos.api.Bootstrap.tracing:type_name -> kratos.api.Tracing
+	10, // 5: kratos.api.Tracing.timeout:type_name -> google.protobuf.Duration
+	10, // 6: kratos.api.Kafka.write_timeout:type_name -> google.protobuf.Duration
+	10, // 7: kratos.api.Kafka.read_timeout:type_name -> google.protobuf.Duration
+	6,  // 8: kratos.api.Server.http:type_name -> kratos.api.Server.HTTP
+	7,  // 9: kratos.api.Server.grpc:type_name -> kratos.api.Server.GRPC
+	8,  // 10: kratos.api.Data.database:type_name -> kratos.api.Data.Database
+	9,  // 11: kratos.api.Data.redis:type_name -> kratos.api.Data.Redis
+	10, // 12: kratos.api.Server.HTTP.timeout:type_name -> google.protobuf.Duration
+	10, // 13: kratos.api.Server.GRPC.timeout:type_name -> google.protobuf.Duration
+	10, // 14: kratos.api.Data.Database.conn_max_lifetime:type_name -> google.protobuf.Duration
+	10, // 15: kratos.api.Data.Database.conn_max_idle_time:type_name -> google.protobuf.Duration
+	10, // 16: kratos.api.Data.Redis.dial_timeout:type_name -> google.protobuf.Duration
+	10, // 17: kratos.api.Data.Redis.read_timeout:type_name -> google.protobuf.Duration
+	10, // 18: kratos.api.Data.Redis.write_timeout:type_name -> google.protobuf.Duration
+	19, // [19:19] is the sub-list for method output_type
+	19, // [19:19] is the sub-list for method input_type
+	19, // [19:19] is the sub-list for extension type_name
+	19, // [19:19] is the sub-list for extension extendee
+	0,  // [0:19] is the sub-list for field type_name
 }
 
 func init() { file_conf_conf_proto_init() }
@@ -774,13 +924,17 @@ func file_conf_conf_proto_init() {
 	if File_conf_conf_proto != nil {
 		return
 	}
+	file_conf_conf_proto_msgTypes[1].OneofWrappers = []any{
+		(*Tracing_HttpEndpoint)(nil),
+		(*Tracing_HttpEndpointUrl)(nil),
+	}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_conf_conf_proto_rawDesc), len(file_conf_conf_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   9,
+			NumMessages:   10,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

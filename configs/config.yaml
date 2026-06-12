@@ -37,3 +37,10 @@ cron_tasks:
   - name: "helloworld"
     schedule: "@every 5s"
     enabled: true
+
+# tracing: OpenTelemetry OTLP/HTTP exporter — leave empty to disable.
+# tracing:
+#   http_endpoint_url: "http://otel-collector:4318/v1/traces"
+#   sample_ratio: 0.1
+#   timeout: 5s
+#   service_name: ""

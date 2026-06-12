@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"flag"
 	"fmt"
 	"os"
@@ -11,6 +12,7 @@ import (
 	"github.com/go-kratos/kratos/v2/config/file"
 	"github.com/go-kratos/kratos/v2/encoding/json"
 	"github.com/go-kratos/kratos/v2/log"
+	kratostracing "github.com/go-kratos/kratos/v2/middleware/tracing"
 	"github.com/go-kratos/kratos/v2/transport/grpc"
 	"github.com/go-kratos/kratos/v2/transport/http"
 	_ "go.uber.org/automaxprocs"
@@ -20,8 +22,10 @@ import (
 	"github.com/go-kratos/kratos-layout/internal/conf"
 	"github.com/go-kratos/kratos-layout/pkg/env"
 	zapLog "github.com/go-kratos/kratos-layout/pkg/log"
+	"github.com/go-kratos/kratos-layout/pkg/metrics"
 	"github.com/go-kratos/kratos-layout/pkg/registry"
 	"github.com/go-kratos/kratos-layout/pkg/registry/nacos"
+	"github.com/go-kratos/kratos-layout/pkg/tracing"
 )
 
 // go build -ldflags "-X main.Version=x.y.z"
@@ -79,8 +83,8 @@ func main() {
 }
 
 func run() error {
-	logger := zapLog.InitDefaultLogger(parseLogLevel())
-	logHelper := log.NewHelper(logger)
+	baseLogger := zapLog.InitDefaultLogger(parseLogLevel())
+	logHelper := log.NewHelper(baseLogger)
 
 	// Load configuration
 	bc, cleanup, err := loadConfig()
@@ -89,6 +93,30 @@ func run() error {
 		return err
 	}
 	defer cleanup()
+
+	// Install global OpenTelemetry tracer provider + propagator.
+	tracingCleanup, err := tracing.Setup(context.Background(), bc.GetTracing(), Name, baseLogger)
+	if err != nil {
+		logHelper.Errorf("failed to setup tracing: %v", err)
+		return err
+	}
+	defer tracingCleanup(context.Background())
+
+	// Install the dedicated Prometheus registry; HTTP server exposes /metrics
+	// against this registry.
+	metricsCleanup, err := metrics.Setup(context.Background(), Name, baseLogger)
+	if err != nil {
+		logHelper.Errorf("failed to setup metrics: %v", err)
+		return err
+	}
+	defer metricsCleanup()
+
+	// Decorate the base logger so every log line carries trace/span IDs from
+	// the current OTel context.
+	logger := log.With(baseLogger,
+		"trace_id", kratostracing.TraceID(),
+		"span_id", kratostracing.SpanID(),
+	)
 
 	r, err := registry.NewNacosRegistryFromEnv()
 	if err != nil {

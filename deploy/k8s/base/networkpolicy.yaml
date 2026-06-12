@@ -1,0 +1,55 @@
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: xxx-service
+  namespace: test
+  labels:
+    app.kubernetes.io/name: xxx-service
+    app.kubernetes.io/part-of: xxx-service
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: xxx-service
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    # Allow HTTP and gRPC from any pod in the namespace.
+    - ports:
+        - port: 8000
+          protocol: TCP
+        - port: 9000
+          protocol: TCP
+  egress:
+    # DNS
+    - ports:
+        - port: 53
+          protocol: UDP
+        - port: 53
+          protocol: TCP
+    # PostgreSQL
+    - ports:
+        - port: 5432
+          protocol: TCP
+    # Redis
+    - ports:
+        - port: 6379
+          protocol: TCP
+    # Kafka
+    - ports:
+        - port: 9092
+          protocol: TCP
+    # Nacos
+    - ports:
+        - port: 8848
+          protocol: TCP
+    # Outgoing gRPC to other services
+    - ports:
+        - port: 9000
+          protocol: TCP
+    # OTLP/HTTP (tracing collector)
+    - ports:
+        - port: 80
+          protocol: TCP
+        - port: 4318
+          protocol: TCP

@@ -1,0 +1,13 @@
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: xxx-service
+  namespace: prod
+  labels:
+    app.kubernetes.io/name: xxx-service
+    app.kubernetes.io/part-of: xxx-service
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: xxx-service

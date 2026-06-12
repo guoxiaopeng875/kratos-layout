@@ -1,0 +1,114 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: xxx-job
+  namespace: test
+  labels:
+    app.kubernetes.io/name: xxx-job
+    app.kubernetes.io/part-of: xxx-service
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: xxx-job
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: xxx-job
+        app.kubernetes.io/part-of: xxx-service
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8000"
+        prometheus.io/path: "/metrics"
+    spec:
+      serviceAccountName: xxx-service
+      imagePullSecrets:
+        - name: registrysecret
+      terminationGracePeriodSeconds: 60
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65534
+        runAsGroup: 65534
+        fsGroup: 65534
+      initContainers:
+        - name: render-config
+          image: busybox:1.36
+          command:
+            - sh
+            - -c
+            - |
+              sed \
+                -e "s|\${DB_PASSWORD}|$DB_PASSWORD|g" \
+                -e "s|\${REDIS_PASSWORD}|$REDIS_PASSWORD|g" \
+                /etc/xxx-service/template/config.yaml > /etc/xxx-service/rendered/config.yaml
+          env:
+            - name: DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: shared-credentials
+                  key: DB_PASSWORD
+            - name: REDIS_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: shared-credentials
+                  key: REDIS_PASSWORD
+          volumeMounts:
+            - name: config-template
+              mountPath: /etc/xxx-service/template
+              readOnly: true
+            - name: config-rendered
+              mountPath: /etc/xxx-service/rendered
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL
+      containers:
+        - name: xxx-job
+          image: REPLACE_WITH_REGISTRY/xxx-service:latest
+          imagePullPolicy: Always
+          command:
+            - job
+            - -conf
+            - /etc/xxx-service/rendered/config.yaml
+          ports:
+            - name: http
+              containerPort: 8000
+              protocol: TCP
+          env:
+            - name: TZ
+              value: "UTC"
+            - name: LOG_LEVEL
+              value: "info"
+            - name: SERVICE_NAME
+              value: "xxx-job"
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              cpu: 500m
+              memory: 256Mi
+          volumeMounts:
+            - name: config-rendered
+              mountPath: /etc/xxx-service/rendered
+              readOnly: true
+            - name: tmp
+              mountPath: /tmp
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL
+      volumes:
+        - name: config-template
+          configMap:
+            name: xxx-service-config
+        - name: config-rendered
+          emptyDir: {}
+        - name: tmp
+          emptyDir: {}

@@ -1,0 +1,56 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: xxx-service-config
+  namespace: test
+  labels:
+    app.kubernetes.io/name: xxx-service
+    app.kubernetes.io/part-of: xxx-service
+data:
+  config.yaml: |
+    server:
+      http:
+        addr: 0.0.0.0:8000
+        timeout: 30s
+      grpc:
+        addr: 0.0.0.0:9000
+        timeout: 30s
+
+    data:
+      database:
+        driver: postgres
+        username: REPLACE_WITH_DB_USERNAME
+        password: ${DB_PASSWORD}
+        host: REPLACE_WITH_DB_HOST
+        port: 5432
+        db_name: app_dev
+        max_idle_conns: 10
+        max_open_conns: 100
+        db_charset: utf8mb4
+        conn_max_lifetime: 3600s
+        conn_max_idle_time: 600s
+      redis:
+        addr: REPLACE_WITH_REDIS_ADDR
+        password: ${REDIS_PASSWORD}
+        db: 0
+        dial_timeout: 5s
+        read_timeout: 1s
+        write_timeout: 1s
+
+    kafka:
+      brokers:
+        - REPLACE_WITH_KAFKA_BROKER
+      group_id: "xxx-service"
+      write_timeout: 10s
+      read_timeout: 10s
+
+    cron_tasks:
+      - name: "helloworld"
+        schedule: "@every 30s"
+        enabled: true
+
+    # tracing: leave empty to disable OTLP export.
+    # tracing:
+    #   http_endpoint_url: "http://otel-collector:4318/v1/traces"
+    #   sample_ratio: 0.1
+    #   timeout: 5s

@@ -10,6 +10,29 @@ message Bootstrap {
   Data data = 2;
   Kafka kafka = 3;
   repeated CronTask cron_tasks = 4;
+  Tracing tracing = 5;
+}
+
+// Tracing holds OpenTelemetry tracing configuration. When the message is nil
+// or no endpoint is configured, tracing setup is skipped (no exporter, no
+// global provider).
+message Tracing {
+  // OTLP/HTTP collector endpoint. Set exactly one of the two fields:
+  //   http_endpoint:     "host:port" form (path defaults to /v1/traces, scheme decided by insecure)
+  //   http_endpoint_url: full URL form (e.g. "http://collector:4318/v1/traces")
+  oneof endpoint {
+    string http_endpoint = 1;
+    string http_endpoint_url = 2;
+  }
+  // Sampling ratio in [0, 1]. Unset → AlwaysSample.
+  optional float sample_ratio = 3;
+  // Exporter timeout. Default: 10s.
+  google.protobuf.Duration timeout = 4;
+  // Use insecure (HTTP, not HTTPS) when http_endpoint is set.
+  optional bool insecure = 5;
+  // Override the service.name resource attribute for tracing. Empty → fall
+  // back to the process-level SERVICE_NAME.
+  string service_name = 6;
 }
 
 // CronTask 定时任务配置

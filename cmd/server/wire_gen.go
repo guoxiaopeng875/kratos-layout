@@ -23,8 +23,13 @@ import (
 
 // wireApp init kratos application.
 func wireApp(confServer *conf.Server, confData *conf.Data, registry *nacos.Registry, logger log.Logger) (*kratos.App, func(), error) {
-	dataData, cleanup, err := data.NewData(confData, logger)
+	client, cleanup, err := data.NewRedisClient(confData, logger)
 	if err != nil {
+		return nil, nil, err
+	}
+	dataData, cleanup2, err := data.NewData(confData, client, logger)
+	if err != nil {
+		cleanup()
 		return nil, nil, err
 	}
 	greeterRepo := data.NewGreeterRepo(dataData, logger)
@@ -34,6 +39,7 @@ func wireApp(confServer *conf.Server, confData *conf.Data, registry *nacos.Regis
 	httpServer := server.NewHTTPServer(confServer, greeterService, logger)
 	app := newApp(logger, grpcServer, httpServer, registry)
 	return app, func() {
+		cleanup2()
 		cleanup()
 	}, nil
 }

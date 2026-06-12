@@ -1,0 +1,53 @@
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: xxx-job
+  namespace: test
+  labels:
+    app.kubernetes.io/name: xxx-job
+    app.kubernetes.io/part-of: xxx-service
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: xxx-job
+  policyTypes:
+    - Ingress
+    - Egress
+  # Allow Prometheus scrape on metrics port.
+  ingress:
+    - ports:
+        - port: 8000
+          protocol: TCP
+  egress:
+    # DNS
+    - ports:
+        - port: 53
+          protocol: UDP
+        - port: 53
+          protocol: TCP
+    # PostgreSQL
+    - ports:
+        - port: 5432
+          protocol: TCP
+    # Redis
+    - ports:
+        - port: 6379
+          protocol: TCP
+    # Kafka
+    - ports:
+        - port: 9092
+          protocol: TCP
+    # Nacos
+    - ports:
+        - port: 8848
+          protocol: TCP
+    # Outgoing gRPC to other services
+    - ports:
+        - port: 9000
+          protocol: TCP
+    # OTLP/HTTP (tracing collector)
+    - ports:
+        - port: 80
+          protocol: TCP
+        - port: 4318
+          protocol: TCP

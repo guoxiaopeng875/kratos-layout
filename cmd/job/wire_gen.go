@@ -9,6 +9,7 @@ package main
 import (
 	"github.com/go-kratos/kratos-layout/internal/conf"
 	"github.com/go-kratos/kratos-layout/internal/job"
+	"github.com/go-kratos/kratos-layout/internal/server"
 	"github.com/go-kratos/kratos/v2"
 	"github.com/go-kratos/kratos/v2/log"
 
@@ -17,11 +18,12 @@ import (
 
 // Injectors from wire.go:
 
-func wireApp(arg []*conf.CronTask, logger log.Logger) (*kratos.App, func(), error) {
+func wireApp(confServer *conf.Server, arg []*conf.CronTask, logger log.Logger) (*kratos.App, func(), error) {
 	helloworldJob := job.NewHelloworldJob(logger)
 	v := job.NewCronJobs(helloworldJob)
 	cronServer := job.NewCronServer(arg, v, logger)
-	app := newApp(logger, cronServer)
+	httpServer := server.NewJobHTTPServer(confServer, logger)
+	app := newApp(logger, cronServer, httpServer)
 	return app, func() {
 	}, nil
 }

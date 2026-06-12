@@ -1,0 +1,111 @@
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: app-alerts
+  namespace: test
+  labels:
+    app.kubernetes.io/name: xxx-service
+    prometheus: kube-prometheus
+    role: alert-rules
+spec:
+  groups:
+    # -------------------------------------------------------
+    # Request Layer Alerts (Kratos middleware)
+    # -------------------------------------------------------
+    - name: app.request
+      rules:
+        - alert: AppHighErrorRate
+          expr: |
+            (
+              sum(rate(server_requests_code_total{code!="0"}[5m]))
+              /
+              sum(rate(server_requests_code_total[5m]))
+            ) > 0.05
+          for: 5m
+          labels:
+            severity: critical
+          annotations:
+            summary: "Server-side error rate is high"
+            description: "Server error rate is above 5% for the last 5 minutes (current: {{ $value | humanizePercentage }})."
+
+        - alert: AppHighLatency
+          expr: |
+            histogram_quantile(0.99, sum(rate(server_requests_seconds_bucket[5m])) by (le))
+            > 1
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            summary: "Server-side P99 latency is high"
+            description: "P99 latency is above 1s for the last 5 minutes (current: {{ $value | humanizeDuration }})."
+
+        - alert: AppServiceDown
+          expr: up{job=~".*xxx-service.*"} == 0
+          for: 2m
+          labels:
+            severity: critical
+          annotations:
+            summary: "Service is down"
+            description: "Service instance {{ $labels.instance }} has been unreachable for more than 2 minutes."
+
+    # -------------------------------------------------------
+    # Infrastructure Alerts
+    # -------------------------------------------------------
+    - name: app.infrastructure
+      rules:
+        - alert: AppDBConnectionPoolExhausted
+          expr: |
+            app_db_in_use_connections
+            /
+            (app_db_open_connections > 0)
+            > 0.9
+          for: 5m
+          labels:
+            severity: critical
+          annotations:
+            summary: "DB connection pool is nearly exhausted"
+            description: "DB connection pool utilization is above 90% for the last 5 minutes (current: {{ $value | humanizePercentage }})."
+
+        - alert: AppRedisHighLatency
+          expr: |
+            histogram_quantile(0.99, sum(rate(app_redis_command_duration_seconds_bucket[5m])) by (le))
+            > 0.1
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            summary: "Redis P99 latency is high"
+            description: "Redis command P99 latency is above 100ms for the last 5 minutes (current: {{ $value | humanizeDuration }})."
+
+        - alert: AppKafkaSendFailure
+          expr: sum(increase(app_kafka_messages_sent_total{result="fail"}[5m])) > 0
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            summary: "Kafka message send failures detected"
+            description: "There have been Kafka message send failures in the last 5 minutes."
+
+    # -------------------------------------------------------
+    # Cron Job Alerts
+    # -------------------------------------------------------
+    - name: app.cronjob
+      rules:
+        - alert: AppCronJobFailed
+          expr: sum(increase(app_cronjob_executions_total{result="fail"}[5m])) by (job) > 0
+          for: 5m
+          labels:
+            severity: critical
+          annotations:
+            summary: "Cron job {{ $labels.job }} has failed"
+            description: "Cron job {{ $labels.job }} has had failures in the last 5 minutes."
+
+        - alert: AppCronJobStale
+          expr: |
+            time() - app_cronjob_last_execution_timestamp > 7200
+          for: 10m
+          labels:
+            severity: warning
+          annotations:
+            summary: "Cron job {{ $labels.job }} may be stale"
+            description: "Cron job {{ $labels.job }} has not executed for more than 2 hours."
